@@ -72,22 +72,23 @@ async function run(ctx, guild, user, client) {
   const cfg = {
     title: "Emergency Recovery Complete",
     description:
-      `Panic mode cleared, channel & role caches refreshed. Antinuke is ready to restore any deleted entity.\n\n` +
-      `**Triggered by:** ${user.tag}\n` +
-      `**Antinuke Shield:** ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}\n` +
-      `**Strict Mode:** ${data.antinuke.strict ? "ON" : "OFF"}\n` +
-      `**Auto-Restore:** ${data.autoRestore.enabled ? "ARMED" : "DISARMED"}`,
+      `Panic cleared, caches refreshed.\n` +
+      `**__Triggered by__**: ${user.tag}\n` +
+      `**__Antinuke Shield__**: ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}\n` +
+      `**__Strict Mode__**: ${data.antinuke.strict ? "ON" : "OFF"}\n` +
+      `**__Auto-Restore__**: ${data.autoRestore.enabled ? "ARMED" : "DISARMED"}`,
     color: "57F287",
     fields: [
-      { name: "Members", value: `\`${memberCount}\``, inline: true },
-      { name: "Channels", value: `\`${totalChannels}\` (text: ${textChannels}, voice: ${voiceChannels})`, inline: true },
-      { name: "Roles", value: `\`${totalRoles}\``, inline: true },
-      { name: "Channels Re-cached", value: `\`${channelsCached}\``, inline: true },
-      { name: "Roles Re-cached", value: `\`${rolesCached}\``, inline: true },
-      { name: "Panic Mode", value: "CLEAR", inline: true },
+      { name: "**__Members__**", value: `\`${memberCount}\``, inline: true },
+      { name: "**__Channels__**", value: `\`${totalChannels}\` (text: ${textChannels}, voice: ${voiceChannels})`, inline: true },
+      { name: "**__Roles__**", value: `\`${totalRoles}\``, inline: true },
+      { name: "**__Channels Re-cached__**", value: `\`${channelsCached}\``, inline: true },
+      { name: "**__Roles Re-cached__**", value: `\`${rolesCached}\``, inline: true },
+      { name: "**__Panic Mode__**", value: "CLEAR", inline: true },
     ],
-    footer: "L • Antinuke • Recovery",
-    showTimestamp: true,
+    footer: "L • Antinuke",
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
 

@@ -59,13 +59,14 @@ function run(ctx, guild, user, action) {
   const cfg = {
     title: "Strict Mode Status",
     description:
-      `**Strict Mode:** ${data.antinuke.strict ? "ON (immediate punish)" : "OFF (threshold mode)"}\n` +
-      `**Threshold:** ${data.antinuke.threshold} actions / ${data.antinuke.window / 1000}s\n` +
-      `**Punishment:** ${data.antinuke.punishment}\n` +
-      `**Antinuke Shield:** ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}`,
+      `**__Strict Mode__**: ${data.antinuke.strict ? "ON (immediate punish)" : "OFF (threshold mode)"}\n` +
+      `**__Threshold__**: ${data.antinuke.threshold} actions / ${data.antinuke.window / 1000}s\n` +
+      `**__Punishment__**: ${data.antinuke.punishment}\n` +
+      `**__Antinuke Shield__**: ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}`,
     color: data.antinuke.strict ? "57F287" : "F1C40F",
     footer: "L • Antinuke",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

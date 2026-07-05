@@ -101,15 +101,15 @@ async function run(ctx, guild, user, role) {
   const cfg = {
     title: "Mass Role Assignment Complete",
     description:
-      `Added **${role.name}** to **${assigned}** human member${assigned === 1 ? "" : "s"}.\n\n` +
-      `**Target humans:** ${total}\n` +
-      `**Assigned:** ${assigned}\n` +
-      `**Failed:** ${failed}\n` +
-      `**Skipped (already had role):** ${skippedAlready}\n` +
-      `**Skipped (bots):** ${skippedBots}`,
+      `**__Role__**: ${role.name}\n` +
+      `**__Assigned__**: ${assigned} / ${total} humans\n` +
+      `**__Failed__**: ${failed}\n` +
+      `**__Skipped (already had role)__**: ${skippedAlready}\n` +
+      `**__Skipped (bots)__**: ${skippedBots}`,
     color: failed > 0 ? "F1C40F" : "57F287",
     footer: "L • Moderation",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
 

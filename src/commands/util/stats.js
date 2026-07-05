@@ -32,22 +32,21 @@ function sendStats(ctx, guild, client) {
   const ping = Math.round(client.ws.ping);
 
   const description =
-    `**Servers:** ${guilds}\n` +
-    `**Cached Users:** ${users}\n` +
-    `**Uptime:** ${uptime}\n` +
-    `**Memory (RSS):** ${mem} MB\n` +
-    `**WebSocket Ping:** ${ping} ms\n` +
-    `**Node.js:** ${process.version}`;
+    `**__Servers__**: ${guilds}\n` +
+    `**__Cached Users__**: ${users}\n` +
+    `**__Uptime__**: ${uptime}\n` +
+    `**__Memory (RSS)__**: ${mem} MB\n` +
+    `**__WebSocket Ping__**: ${ping} ms\n` +
+    `**__Node.js__**: ${process.version}`;
 
   const embed = buildFromConfig(
     {
       title: `${config.name} — Statistics`,
-      titleEmoji: "📊",
       description,
       color: "2B2D31",
-      footer: `${config.name} • ${config.tagline}`,
-      footerEmoji: "👑",
-      showTimestamp: true,
+      footer: "L • Util",
+      footerIcon: "bot",
+      showTimestamp: false,
       thumbnailUrl: client.user ? client.user.displayAvatarURL() : undefined,
     },
     guild

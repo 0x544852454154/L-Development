@@ -79,13 +79,14 @@ function run(ctx, guild, user, action, value) {
   const cfg = {
     title: "Anti-Spam Status",
     description:
-      `**Anti-Spam:** ${data.antinuke.antiSpam ? "ON" : "OFF"}\n` +
-      `**Threshold:** ${data.antinuke.spamThreshold || 7} messages / 5s\n` +
-      `**Punishment:** 10-minute timeout\n` +
-      `**Antinuke Shield:** ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}`,
-    color: data.antinuke.antiSpam ? "57F287" : "949BA4",
+      `**__Anti-Spam__**: ${data.antinuke.antiSpam ? "ON" : "OFF"}\n` +
+      `**__Threshold__**: ${data.antinuke.spamThreshold || 7} messages / 5s\n` +
+      `**__Punishment__**: 10-minute timeout\n` +
+      `**__Antinuke Shield__**: ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}`,
+    color: data.antinuke.antiSpam ? "57F287" : "2B2D31",
     footer: "L • Antinuke",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

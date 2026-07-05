@@ -3,13 +3,27 @@ const { getGuild } = require("./database");
 const { resolveEmojis } = require("./emojiUtils");
 
 /*
- * L Embed Builder — v3 (Melon-inspired + server emoji support)
+ * L Embed Builder — v4 (combined astryx + Reo-Bot style)
  *
- * Aesthetic: dark 0x2B2D31 accent, "**Label:** value" sectioned rows, minimal.
- * Server emojis: ":name:" tokens in any text field are resolved to the guild's
- * custom emojis via resolveEmojis(). Controlled by cfg.useServerEmojis (default true).
- * Set useServerEmojis:false on a config to render emoji tokens literally.
+ * Combined aesthetic:
+ *  - Dark 0x2B2D31 accent (astryx), red 0xED4245 for danger (Reo-Bot)
+ *  - "**__Field__**" underscore-bold rows (Reo-Bot signature)
+ *  - Emoji prefixes in titles (astryx + Reo-Bot) — :name: tokens resolve to guild emojis
+ *  - Guild icon thumbnail on event/log embeds (Reo-Bot pattern)
+ *  - Bot avatar as footer icon (Reo-Bot pattern)
+ *  - <t:unix:R> relative timestamps for events (Reo-Bot pattern)
+ *  - "-# subtext" small-print footers (astryx pattern)
+ *
+ * Server emojis: ":name:" tokens resolve to guild custom emojis via resolveEmojis().
+ * Controlled by cfg.useServerEmojis (default true).
+ *
+ * Auto-styling: set cfg.thumbnail="guild" to auto-use the guild icon,
+ * cfg.footerIcon="bot" to auto-use the bot avatar. The buildEmbed function
+ * accepts a `client` ref so it can access client.user.displayAvatarURL().
  */
+
+let _client = null;
+function setClient(client) { _client = client; }
 
 // Replace {placeholders} in a string with values from `vars`
 function fill(text, vars = {}) {
@@ -19,8 +33,14 @@ function fill(text, vars = {}) {
   );
 }
 
-// Minimal markdown: **bold** and *italic* and `code` are passed through to Discord
-// natively, so we only do placeholder substitution here.
+// Relative timestamp tag: <t:unix:R>
+function relTimestamp(ts = Date.now()) {
+  return `<t:${Math.floor(ts / 1000)}:R>`;
+}
+// Full timestamp tag: <t:unix:F>
+function fullTimestamp(ts = Date.now()) {
+  return `<t:${Math.floor(ts / 1000)}:F>`;
+}
 
 // Resolve a config object for a given embed key, walking the hierarchy:
 // guild.embeds[category][key] -> guild.embeds[key] (flat, legacy) -> built-in default
@@ -93,9 +113,12 @@ function buildFromConfig(cfg, guild, vars = {}) {
     }
   }
 
-  // Thumbnail
-  if (cfg.thumbnailUrl) {
-    try { embed.setThumbnail(cfg.thumbnailUrl); } catch {}
+  // Thumbnail — supports explicit URL or "guild" (auto guild icon)
+  const thumbUrl = cfg.thumbnail === "guild"
+    ? (guild?.iconURL ? guild.iconURL({ size: 256 }) : null)
+    : (cfg.thumbnailUrl || null);
+  if (thumbUrl) {
+    try { embed.setThumbnail(thumbUrl); } catch {}
   }
 
   // Image
@@ -104,11 +127,17 @@ function buildFromConfig(cfg, guild, vars = {}) {
   }
 
   // Footer (footerEmoji tokens resolve too if present)
+  // footerIcon="bot" auto-uses the bot avatar (Reo-Bot pattern)
   if (cfg.footer || cfg.footerEmoji || cfg.showTimestamp) {
     const emoji = cfg.footerEmoji ? resolve(String(cfg.footerEmoji)) : null;
     const text = cfg.footer ? resolve(cfg.footer) : "";
     const footerText = [emoji, text].filter(Boolean).join(" ");
-    if (footerText) embed.setFooter({ text: footerText });
+    const footerObj = {};
+    if (footerText) footerObj.text = footerText;
+    if (cfg.footerIcon === "bot" && _client?.user) {
+      footerObj.iconURL = _client.user.displayAvatarURL();
+    }
+    if (Object.keys(footerObj).length) embed.setFooter(footerObj);
   }
 
   if (cfg.showTimestamp) embed.setTimestamp();
@@ -137,43 +166,44 @@ const success = (ctx, guild, detail, vars = {}) => sendEmbed(ctx, "success", gui
 const error = (ctx, guild, detail, vars = {}) => sendEmbed(ctx, "error", guild, { detail, ...vars });
 const warn = (ctx, guild, detail, vars = {}) => sendEmbed(ctx, "warn", guild, { detail, ...vars });
 
-// ===== Built-in default embeds (Melon-inspired: dark, sectioned, minimal) =====
-// Aesthetic: 0x2B2D31 dark accent, "### Title" headers, "**Label:** value" rows,
-// <t:UNIX:F> timestamps, "-# subtext" footers. No emojis. Monochrome.
+// ===== Built-in default embeds (combined astryx + Reo-Bot style) =====
+// Aesthetic: dark 0x2B2D31 accent, "**__Field__**" underscore-bold rows (Reo-Bot),
+// emoji prefixes in titles (astryx/Reo-Bot), guild icon thumbnails on events,
+// bot avatar footer icons, <t:unix:R> timestamps.
 const DEFAULT_EMBEDS = {
   // --- System / generic ---
-  success: { title: "Success", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
-  error: { title: "Error", description: "{detail}", color: "ED4245", footer: "L", showTimestamp: false },
-  warn: { title: "Warning", description: "{detail}", color: "F1C40F", footer: "L", showTimestamp: false },
-  info: { title: "Information", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
-  no_perms: { title: "Access Denied", description: "You lack permission to use this command.", color: "ED4245", footer: "L", showTimestamp: false },
-  generic: { title: "L", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
+  success: { title: "Success", description: "{detail}", color: "57F287", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  error: { title: "Error", description: "{detail}", color: "ED4245", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  warn: { title: "Warning", description: "{detail}", color: "F1C40F", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  info: { title: "Information", description: "{detail}", color: "2B2D31", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  no_perms: { title: "Access Denied", description: "You lack permission to use this command.", color: "ED4245", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  generic: { title: "L", description: "{detail}", color: "2B2D31", footer: "L", footerIcon: "bot", showTimestamp: false },
 
   // --- Antinuke ---
-  antinuke_enabled: { title: "Antinuke Enabled", description: "**Status:** Online\n**Mode:** Strict\nAll protections are now active.", color: "2B2D31", footer: "L", showTimestamp: false },
-  antinuke_disabled: { title: "Antinuke Disabled", description: "**Status:** Offline\nAll protections are now off.", color: "ED4245", footer: "L", showTimestamp: false },
-  antinuke_triggered: { title: "Antinuke Triggered", description: "**User:** {executor}\n**Action:** {action}\n**Result:** Reverted + offender punished", color: "ED4245", footer: "L", showTimestamp: true },
-  antinuke_blocked: { title: "Action Blocked", description: "**User:** {executor}\n**Action:** {action}\n**Result:** Blocked, no damage", color: "ED4245", footer: "L", showTimestamp: false },
-  bot_blocked: { title: "Bot Blocked", description: "**Bot:** {bot}\n**Added by:** {executor}\n**Result:** Bot kicked, adder punished", color: "ED4245", footer: "L", showTimestamp: false },
-  raid_detected: { title: "Raid Detected", description: "**Joins:** {count} in {window}s\n**Result:** Panic mode engaged", color: "ED4245", footer: "L", showTimestamp: true },
+  antinuke_enabled: { title: "Antinuke Enabled", description: "**__Status__**: Online\n**__Mode__**: Strict\nAll protections are now active.", color: "57F287", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  antinuke_disabled: { title: "Antinuke Disabled", description: "**__Status__**: Offline\nAll protections are now off.", color: "ED4245", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  antinuke_triggered: { title: "Antinuke Triggered", description: "**__User__**: {executor}\n**__Action__**: {action}\n**__Result__**: Reverted + offender punished", color: "ED4245", thumbnail: "guild", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: true },
+  antinuke_blocked: { title: "Action Blocked", description: "**__User__**: {executor}\n**__Action__**: {action}\n**__Result__**: Blocked, no damage", color: "ED4245", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  bot_blocked: { title: "Bot Blocked", description: "**__Bot__**: {bot}\n**__Added by__**: {executor}\n**__Result__**: Bot kicked, adder punished", color: "ED4245", footer: "L • Bot Protection", footerIcon: "bot", showTimestamp: false },
+  raid_detected: { title: "Raid Detected", description: "**__Joins__**: {count} in {window}s\n**__Result__**: Panic mode engaged", color: "ED4245", thumbnail: "guild", footer: "L • Anti-Raid", footerIcon: "bot", showTimestamp: true },
 
   // --- Info ---
-  help_menu: { title: "All Commands", description: "Use /help <category> to browse a category.", color: "2B2D31", footer: "L", showTimestamp: false },
+  help_menu: { title: "All Commands", description: "Use /help <category> to browse a category.", color: "2B2D31", footer: "L • Info", footerIcon: "bot", showTimestamp: false },
 
   // --- Moderation ---
-  ban_success: { title: "Member Banned", description: "**User:** {user}\n**Reason:** {reason}", color: "ED4245", footer: "L", showTimestamp: false },
-  kick_success: { title: "Member Kicked", description: "**User:** {user}\n**Reason:** {reason}", color: "ED4245", footer: "L", showTimestamp: false },
-  timeout_success: { title: "Member Timed Out", description: "**User:** {user}\n**Duration:** {duration}", color: "F1C40F", footer: "L", showTimestamp: false },
-  lock_success: { title: "Channel Locked", description: "**Channel:** {channel}", color: "ED4245", footer: "L", showTimestamp: false },
-  purge_success: { title: "Messages Purged", description: "**Count:** {count}\n**Channel:** {channel}", color: "2B2D31", footer: "L", showTimestamp: false },
-  lockdown_enabled: { title: "Lockdown Engaged", description: "**Status:** All channels locked\nUse /lockdown off to release.", color: "ED4245", footer: "L", showTimestamp: false },
+  ban_success: { title: "Member Banned", description: "**__User__**: {user}\n**__Reason__**: {reason}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  kick_success: { title: "Member Kicked", description: "**__User__**: {user}\n**__Reason__**: {reason}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  timeout_success: { title: "Member Timed Out", description: "**__User__**: {user}\n**__Duration__**: {duration}", color: "F1C40F", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  lock_success: { title: "Channel Locked", description: "**__Channel__**: {channel}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  purge_success: { title: "Messages Purged", description: "**__Count__**: {count}\n**__Channel__**: {channel}", color: "2B2D31", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  lockdown_enabled: { title: "Lockdown Engaged", description: "**__Status__**: All channels locked\nUse /lockdown off to release.", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
 
   // --- Welcome ---
-  greet_welcome: { title: "Welcome", description: "**User:** {user}\n**Server:** {server}\n**Member #:** {count}", color: "2B2D31", footer: "L", showTimestamp: false },
-  greet_goodbye: { title: "Goodbye", description: "**User:** {user}\n**Members:** {count}", color: "2B2D31", footer: "L", showTimestamp: false },
+  greet_welcome: { title: "Welcome", description: "**__User__**: {user}\n**__Server__**: {server}\n**__Member #__**: {count}", color: "57F287", footer: "L • Welcome", footerIcon: "bot", showTimestamp: false },
+  greet_goodbye: { title: "Goodbye", description: "**__User__**: {user}\n**__Members__**: {count}", color: "2B2D31", footer: "L • Welcome", footerIcon: "bot", showTimestamp: false },
 
   // --- Premium ---
-  premium_status: { title: "Premium Active", description: "**Status:** Unlocked\nAll premium commands available.", color: "F1C40F", footer: "L", showTimestamp: false },
+  premium_status: { title: "Premium Active", description: "**__Status__**: Unlocked\nAll premium commands available.", color: "F1C40F", footer: "L • Premium", footerIcon: "bot", showTimestamp: false },
 };
 
 // Category index: maps category name -> { embedKey: true } for hierarchical lookup
@@ -194,6 +224,9 @@ module.exports = {
   success,
   error,
   warn,
+  setClient,
+  relTimestamp,
+  fullTimestamp,
   DEFAULT_EMBEDS,
   CATEGORY_INDEX,
 };

@@ -35,12 +35,11 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "L is Online",
-        titleEmoji: "🟢",
-        description: `**Uptime:** \`${uptime}\`\n**Online since:** \`${since}\`\n**Serving:** \`${client.guilds.cache.size}\` servers`,
+        description: `**__Uptime__**: \`${uptime}\`\n**__Online since__**: \`${since}\`\n**__Serving__**: \`${client.guilds.cache.size}\` servers`,
         color: "57F287",
         footer: "L • Info",
-        footerEmoji: "📡",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       ctx.guild
     );

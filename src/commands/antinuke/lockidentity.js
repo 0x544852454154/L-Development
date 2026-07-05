@@ -51,14 +51,14 @@ async function runIdentity(ctx, guild, user, action) {
     const embed = buildFromConfig({
       title: "Server Identity Locked",
       description:
-        `The current server identity has been snapshotted and is now protected.\n\n` +
-        `**Name:** ${guild.name}\n` +
-        `**Icon:** ${guild.iconURL() ? "Set (protected)" : "None"}\n` +
-        `**Description:** ${guild.description ? "Set (protected)" : "None"}\n\n` +
-        `Any unauthorized change to these will be **instantly reverted** and the offender **banned**.`,
+        `**__Name__**: ${guild.name}\n` +
+        `**__Icon__**: ${guild.iconURL() ? "Set (protected)" : "None"}\n` +
+        `**__Description__**: ${guild.description ? "Set (protected)" : "None"}\n\n` +
+        `Any unauthorized change will be instantly reverted and the offender banned.`,
       color: "57F287",
       footer: "L • Identity Lock",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
     }, guild);
     return ctx.reply({ embeds: [embed] });
   }
@@ -93,15 +93,16 @@ async function runIdentity(ctx, guild, user, action) {
   const embed = buildFromConfig({
     title: "Server Identity Lock",
     description:
-      `**Status:** ${id.locked ? "LOCKED (protected)" : "Unlocked"}\n\n` +
-      `**Protected Name:** ${id.name || "(not snapshotted — will use previous name on revert)"}\n` +
-      `**Protected Icon:** ${id.iconUrl ? "Set" : "(not snapshotted — will use protected L icon on revert)"}\n` +
-      `**Protected Description:** ${id.description !== null && id.description !== undefined ? "Set" : "(not snapshotted)"}\n\n` +
+      `**__Status__**: ${id.locked ? "LOCKED (protected)" : "Unlocked"}\n` +
+      `**__Protected Name__**: ${id.name || "(not snapshotted — will use previous name on revert)"}\n` +
+      `**__Protected Icon__**: ${id.iconUrl ? "Set" : "(not snapshotted — will use protected L icon on revert)"}\n` +
+      `**__Protected Description__**: ${id.description !== null && id.description !== undefined ? "Set" : "(not snapshotted)"}\n\n` +
       `Use \`/lockidentity snapshot\` to capture the current identity.\n` +
       `Use \`/lockidentity seticon\` to set the L icon and lock it.`,
     color: id.locked ? "57F287" : "F1C40F",
     footer: "L • Identity Lock",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   }, guild);
   return ctx.reply({ embeds: [embed] });
 }

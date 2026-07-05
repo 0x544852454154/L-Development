@@ -11,7 +11,7 @@ const {
 } = require("discord.js");
 const config = require("./src/config");
 const { getGuild, updateGuild, addAudit, flushNow } = require("./src/database");
-const { sendEmbed, success, error } = require("./src/embedBuilder");
+const { sendEmbed, success, error, setClient } = require("./src/embedBuilder");
 const antinuke = require("./src/handlers/antinuke");
 const logger = require("./src/logger");
 
@@ -75,6 +75,7 @@ function hasPermission(member, command) {
 client.once(Events.ClientReady, (c) => {
   logger.log(`[ready] ${c.user.tag} online — serving ${c.guilds.cache.size} guilds`);
   c.user.setActivity("for nukes", { type: 3 }); // Watching
+  setClient(c); // give the embed builder access to the bot avatar for footer icons
 
   // Cache all existing channels/roles so auto-restore can revert them.
   // Wrap in try/catch so one bad channel never crashes startup.

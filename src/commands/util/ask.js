@@ -45,12 +45,11 @@ function answer(ctx, guild, user, q) {
   const embed = buildFromConfig(
     {
       title: "L Considers Your Query",
-      titleEmoji: "💭",
-      description: `**Question:** ${q}\n**Verdict:** *${verdict}*`,
+      description: `**__Question__**: ${q}\n**__Verdict__**: *${verdict}*`,
       color: "2B2D31",
-      footer: "L • The Detective",
-      footerEmoji: "👑",
-      showTimestamp: true,
+      footer: "L • Util",
+      footerIcon: "bot",
+      showTimestamp: false,
       thumbnailUrl: user.displayAvatarURL(),
     },
     guild

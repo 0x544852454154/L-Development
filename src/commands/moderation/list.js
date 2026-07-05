@@ -76,12 +76,11 @@ module.exports = {
       const embed = buildFromConfig(
         {
           title: `Banned Members (${bans.size})`,
-          titleEmoji: "🔨",
           description: formatBanList(bans),
           color: "2B2D31",
           footer: "L • Moderation",
-          footerEmoji: "🛡️",
-          showTimestamp: true,
+          footerIcon: "bot",
+          showTimestamp: false,
         },
         guild,
         { count: bans.size }
@@ -97,12 +96,11 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: `Timed-Out Members (${timedOut.size})`,
-        titleEmoji: "⏱️",
         description: formatTimeoutList(guild.members.cache),
         color: "2B2D31",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild,
       { count: timedOut.size }

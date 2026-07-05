@@ -35,12 +35,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "Channel Hidden",
-        titleEmoji: "🙈",
-        description: `${channel} has been hidden from \`@everyone\`.`,
+        description:
+          `**__Channel__**: ${channel}\n` +
+          `**__Visibility__**: Hidden from \`@everyone\``,
         color: "F1C40F",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       interaction.guild,
       { channel: channel.toString() }
@@ -67,12 +68,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "Channel Hidden",
-        titleEmoji: "🙈",
-        description: `${channel} has been hidden from \`@everyone\`.`,
+        description:
+          `**__Channel__**: ${channel}\n` +
+          `**__Visibility__**: Hidden from \`@everyone\``,
         color: "F1C40F",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       message.guild,
       { channel: channel.toString() }

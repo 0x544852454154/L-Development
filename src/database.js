@@ -17,30 +17,30 @@ const config = require("./config");
 const DATA_DIR = path.join(__dirname, "..", "serverdata");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// Melon-inspired minimal dark embeds (mirrors embedBuilder.DEFAULT_EMBEDS)
+// Combined astryx + Reo-Bot style embeds (mirrors embedBuilder.DEFAULT_EMBEDS)
 const DEFAULT_EMBEDS = {
-  success: { title: "Success", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
-  error: { title: "Error", description: "{detail}", color: "ED4245", footer: "L", showTimestamp: false },
-  warn: { title: "Warning", description: "{detail}", color: "F1C40F", footer: "L", showTimestamp: false },
-  info: { title: "Information", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
-  no_perms: { title: "Access Denied", description: "You lack permission to use this command.", color: "ED4245", footer: "L", showTimestamp: false },
-  generic: { title: "L", description: "{detail}", color: "2B2D31", footer: "L", showTimestamp: false },
-  antinuke_enabled: { title: "Antinuke Enabled", description: "**Status:** Online\n**Mode:** Strict\nAll protections are now active.", color: "2B2D31", footer: "L", showTimestamp: false },
-  antinuke_disabled: { title: "Antinuke Disabled", description: "**Status:** Offline\nAll protections are now off.", color: "ED4245", footer: "L", showTimestamp: false },
-  antinuke_triggered: { title: "Antinuke Triggered", description: "**User:** {executor}\n**Action:** {action}\n**Result:** Reverted + offender punished", color: "ED4245", footer: "L", showTimestamp: true },
-  antinuke_blocked: { title: "Action Blocked", description: "**User:** {executor}\n**Action:** {action}\n**Result:** Blocked, no damage", color: "ED4245", footer: "L", showTimestamp: false },
-  bot_blocked: { title: "Bot Blocked", description: "**Bot:** {bot}\n**Added by:** {executor}\n**Result:** Bot kicked, adder punished", color: "ED4245", footer: "L", showTimestamp: false },
-  raid_detected: { title: "Raid Detected", description: "**Joins:** {count} in {window}s\n**Result:** Panic mode engaged", color: "ED4245", footer: "L", showTimestamp: true },
-  help_menu: { title: "All Commands", description: "Use /help <category> to browse a category.", color: "2B2D31", footer: "L", showTimestamp: false },
-  ban_success: { title: "Member Banned", description: "**User:** {user}\n**Reason:** {reason}", color: "ED4245", footer: "L", showTimestamp: false },
-  kick_success: { title: "Member Kicked", description: "**User:** {user}\n**Reason:** {reason}", color: "ED4245", footer: "L", showTimestamp: false },
-  timeout_success: { title: "Member Timed Out", description: "**User:** {user}\n**Duration:** {duration}", color: "F1C40F", footer: "L", showTimestamp: false },
-  lock_success: { title: "Channel Locked", description: "**Channel:** {channel}", color: "ED4245", footer: "L", showTimestamp: false },
-  purge_success: { title: "Messages Purged", description: "**Count:** {count}\n**Channel:** {channel}", color: "2B2D31", footer: "L", showTimestamp: false },
-  lockdown_enabled: { title: "Lockdown Engaged", description: "**Status:** All channels locked\nUse /lockdown off to release.", color: "ED4245", footer: "L", showTimestamp: false },
-  greet_welcome: { title: "Welcome", description: "**User:** {user}\n**Server:** {server}\n**Member #:** {count}", color: "2B2D31", footer: "L", showTimestamp: false },
-  greet_goodbye: { title: "Goodbye", description: "**User:** {user}\n**Members:** {count}", color: "2B2D31", footer: "L", showTimestamp: false },
-  premium_status: { title: "Premium Active", description: "**Status:** Unlocked\nAll premium commands available.", color: "F1C40F", footer: "L", showTimestamp: false },
+  success: { title: "Success", description: "{detail}", color: "57F287", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  error: { title: "Error", description: "{detail}", color: "ED4245", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  warn: { title: "Warning", description: "{detail}", color: "F1C40F", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  info: { title: "Information", description: "{detail}", color: "2B2D31", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  no_perms: { title: "Access Denied", description: "You lack permission to use this command.", color: "ED4245", footer: "L • System", footerIcon: "bot", showTimestamp: false },
+  generic: { title: "L", description: "{detail}", color: "2B2D31", footer: "L", footerIcon: "bot", showTimestamp: false },
+  antinuke_enabled: { title: "Antinuke Enabled", description: "**__Status__**: Online\n**__Mode__**: Strict\nAll protections are now active.", color: "57F287", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  antinuke_disabled: { title: "Antinuke Disabled", description: "**__Status__**: Offline\nAll protections are now off.", color: "ED4245", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  antinuke_triggered: { title: "Antinuke Triggered", description: "**__User__**: {executor}\n**__Action__**: {action}\n**__Result__**: Reverted + offender punished", color: "ED4245", thumbnail: "guild", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: true },
+  antinuke_blocked: { title: "Action Blocked", description: "**__User__**: {executor}\n**__Action__**: {action}\n**__Result__**: Blocked, no damage", color: "ED4245", footer: "L • Antinuke", footerIcon: "bot", showTimestamp: false },
+  bot_blocked: { title: "Bot Blocked", description: "**__Bot__**: {bot}\n**__Added by__**: {executor}\n**__Result__**: Bot kicked, adder punished", color: "ED4245", footer: "L • Bot Protection", footerIcon: "bot", showTimestamp: false },
+  raid_detected: { title: "Raid Detected", description: "**__Joins__**: {count} in {window}s\n**__Result__**: Panic mode engaged", color: "ED4245", thumbnail: "guild", footer: "L • Anti-Raid", footerIcon: "bot", showTimestamp: true },
+  help_menu: { title: "All Commands", description: "Use /help <category> to browse a category.", color: "2B2D31", footer: "L • Info", footerIcon: "bot", showTimestamp: false },
+  ban_success: { title: "Member Banned", description: "**__User__**: {user}\n**__Reason__**: {reason}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  kick_success: { title: "Member Kicked", description: "**__User__**: {user}\n**__Reason__**: {reason}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  timeout_success: { title: "Member Timed Out", description: "**__User__**: {user}\n**__Duration__**: {duration}", color: "F1C40F", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  lock_success: { title: "Channel Locked", description: "**__Channel__**: {channel}", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  purge_success: { title: "Messages Purged", description: "**__Count__**: {count}\n**__Channel__**: {channel}", color: "2B2D31", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  lockdown_enabled: { title: "Lockdown Engaged", description: "**__Status__**: All channels locked\nUse /lockdown off to release.", color: "ED4245", footer: "L • Moderation", footerIcon: "bot", showTimestamp: false },
+  greet_welcome: { title: "Welcome", description: "**__User__**: {user}\n**__Server__**: {server}\n**__Member #__**: {count}", color: "57F287", footer: "L • Welcome", footerIcon: "bot", showTimestamp: false },
+  greet_goodbye: { title: "Goodbye", description: "**__User__**: {user}\n**__Members__**: {count}", color: "2B2D31", footer: "L • Welcome", footerIcon: "bot", showTimestamp: false },
+  premium_status: { title: "Premium Active", description: "**__Status__**: Unlocked\nAll premium commands available.", color: "F1C40F", footer: "L • Premium", footerIcon: "bot", showTimestamp: false },
 };
 
 function defaultGuildData() {

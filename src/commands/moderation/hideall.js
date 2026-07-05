@@ -38,12 +38,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "All Channels Hidden",
-        titleEmoji: "🙈",
-        description: `⚠️ **Destructive action completed.**\nHidden **${success}/${total}** channels from \`@everyone\`.${failed ? `\nFailed: **${failed}** (missing permissions).` : ""}`,
+        description:
+          `**__Hidden__**: ${success}/${total} channels` +
+          (failed ? `\n**__Failed__**: ${failed} (missing permissions)` : ""),
         color: "ED4245",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       interaction.guild,
       { success, total, failed }
@@ -64,12 +65,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "All Channels Hidden",
-        titleEmoji: "🙈",
-        description: `⚠️ **Destructive action completed.**\nHidden **${success}/${total}** channels from \`@everyone\`.${failed ? `\nFailed: **${failed}** (missing permissions).` : ""}`,
+        description:
+          `**__Hidden__**: ${success}/${total} channels` +
+          (failed ? `\n**__Failed__**: ${failed} (missing permissions)` : ""),
         color: "ED4245",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       message.guild,
       { success, total, failed }

@@ -23,7 +23,7 @@ module.exports = {
     const sent = await send({
       embeds: [
         buildFromConfig(
-          { title: "Pinging…", titleEmoji: "📡", description: "Measuring latency…", color: "F1C40F", showTimestamp: false },
+          { title: "Pinging…", description: "Measuring latency…", color: "F1C40F", footer: "L • Info", footerIcon: "bot", showTimestamp: false },
           ctx.guild
         ),
       ],
@@ -33,13 +33,12 @@ module.exports = {
     const color = apiPing < 100 ? "57F287" : apiPing < 250 ? "F1C40F" : "ED4245";
     const embed = buildFromConfig(
       {
-        title: "Pong! 🏓",
-        titleEmoji: "🏓",
-        description: `**Gateway:** \`${apiPing}ms\`\n**API Round-Trip:** \`${roundTrip}ms\``,
+        title: "Pong!",
+        description: `**__Gateway__**: \`${apiPing}ms\`\n**__API Round-Trip__**: \`${roundTrip}ms\``,
         color,
         footer: "L • Info",
-        footerEmoji: "📡",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       ctx.guild
     );

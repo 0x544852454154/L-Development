@@ -83,8 +83,9 @@ function run(ctx, guild, user, action, botId) {
       ? list.map((id) => `• <@${id}> — \`${id}\``).join("\n")
       : "No bots are currently whitelisted.",
     color: "2B2D31",
-    footer: `L • Antinuke • ${list.length} bot${list.length === 1 ? "" : "s"}`,
-    showTimestamp: true,
+    footer: "L • Antinuke",
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

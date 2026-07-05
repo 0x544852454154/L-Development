@@ -6,7 +6,6 @@ const { resolveEmojis } = require("../../emojiUtils");
 
 // The L-color emoji banner — resolved against the guild's custom emojis.
 const L_BANNER = ":lblue: :lwhite: :lred: :lgreen: :lorange: :lpink:";
-
 function banner(guild) {
   return resolveEmojis(L_BANNER, guild);
 }
@@ -31,7 +30,7 @@ module.exports = {
     if (cat) {
       const category = config.categories.find((c) => c.name === cat);
       if (!category) return sendEmbed(interaction, "error", interaction.guild, { detail: "Category not found." });
-      // Per-category: compact list, one line of commands
+      // Per-category: compact list with combined style
       const embed = buildFromConfig(
         {
           authorName: banner(interaction.guild),
@@ -39,6 +38,7 @@ module.exports = {
           description: category.commands.map((c) => `\`${c}\``).join("  "),
           color: "2B2D31",
           footer: `L • ${category.commands.length} commands`,
+          footerIcon: "bot",
           showTimestamp: false,
         },
         interaction.guild
@@ -46,10 +46,10 @@ module.exports = {
       return interaction.reply({ embeds: [embed] });
     }
 
-    // Full menu — compact, each category on its own block (matches the screenshot style)
+    // Full menu — combined style: each category as a section
     let body = "";
     for (const c of config.categories) {
-      body += `**${c.name}**\n${c.commands.join(" ")}\n\n`;
+      body += `**__${c.name}__**\n${c.commands.join(" ")}\n\n`;
     }
     const embed = buildFromConfig(
       {
@@ -58,6 +58,7 @@ module.exports = {
         description: body.trim(),
         color: "2B2D31",
         footer: `L • ${total} commands`,
+        footerIcon: "bot",
         showTimestamp: false,
       },
       interaction.guild
@@ -80,6 +81,7 @@ module.exports = {
           description: category.commands.map((c) => `\`${c}\``).join("  "),
           color: "2B2D31",
           footer: `L • ${category.commands.length} commands`,
+          footerIcon: "bot",
           showTimestamp: false,
         },
         message.guild
@@ -89,7 +91,7 @@ module.exports = {
 
     let body = "";
     for (const c of config.categories) {
-      body += `**${c.name}**\n${c.commands.join(" ")}\n\n`;
+      body += `**__${c.name}__**\n${c.commands.join(" ")}\n\n`;
     }
     const embed = buildFromConfig(
       {
@@ -98,6 +100,7 @@ module.exports = {
         description: body.trim(),
         color: "2B2D31",
         footer: `L • ${total} commands`,
+        footerIcon: "bot",
         showTimestamp: false,
       },
       message.guild

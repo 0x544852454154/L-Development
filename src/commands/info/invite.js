@@ -21,11 +21,10 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "Invite L to Your Server",
-        titleEmoji: "🔗",
-        description: `Click the link below to add **L — The Antinuke Authority** to your server with full permissions.\n\n**[➜ Invite L](${inviteUrl})**\n\nRecommended scopes: \`bot\`, \`applications.commands\`\nRecommended permissions: \`Administrator\` (for full antinuke + auto-restore)`,
+        description: `**__Invite L__**: [Add L to your server](${inviteUrl})\n\n**__Scopes__**: \`bot\`, \`applications.commands\`\n**__Permissions__**: Administrator (for full antinuke + auto-restore)`,
         color: "ED4245",
-        footer: "L • The Antinuke Authority",
-        footerEmoji: "⚡",
+        footer: "L • Info",
+        footerIcon: "bot",
         showTimestamp: false,
       },
       ctx.guild

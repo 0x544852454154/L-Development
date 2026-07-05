@@ -61,14 +61,15 @@ async function run(ctx, guild, user, action, exemptRoleId) {
     const cfg = {
       title: "Lockdown Status",
       description:
-        `**Lockdown:** ${lockdownState.enabled ? "ENGAGED" : "clear"}\n` +
+        `**__Lockdown__**: ${lockdownState.enabled ? "ENGAGED" : "clear"}\n` +
         (lockdownState.enabled && lockdownState.exemptRoleId
-          ? `**Exempt Role:** <@&${lockdownState.exemptRoleId}>\n`
+          ? `**__Exempt Role__**: <@&${lockdownState.exemptRoleId}>\n`
           : "") +
-        `**Affected Channels:** all text channels (SendMessages denied for @everyone)`,
+        `**__Affected Channels__**: all text channels (SendMessages denied for @everyone)`,
       color: lockdownState.enabled ? "ED4245" : "57F287",
       footer: "L • Moderation",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
     };
     const embed = buildFromConfig(cfg, guild);
     return ctx.reply({ embeds: [embed] });
@@ -111,13 +112,14 @@ async function run(ctx, guild, user, action, exemptRoleId) {
       {
         title: "Server Lockdown Engaged",
         description:
-          `All text channels have been locked. Only whitelisted roles can send messages.\n` +
-          `Use \`/lockdown off\` to release.\n\n` +
-          `**Channels Locked:** ${successCount}/${textChannels.size}${failedCount ? `\n**Failed:** ${failedCount}` : ""}` +
-          (exemptRoleId ? `\n**Exempt Role:** <@&${exemptRoleId}>` : ""),
+          `**__Channels Locked__**: ${successCount}/${textChannels.size}` +
+          (failedCount ? `\n**__Failed__**: ${failedCount}` : "") +
+          (exemptRoleId ? `\n**__Exempt Role__**: <@&${exemptRoleId}>` : "") +
+          `\n\nUse \`/lockdown off\` to release.`,
         color: "ED4245",
         footer: "L • Moderation",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );
@@ -152,11 +154,12 @@ async function run(ctx, guild, user, action, exemptRoleId) {
       {
         title: "Server Lockdown Released",
         description:
-          `All text channels have been unlocked. Members can send messages again.\n\n` +
-          `**Channels Unlocked:** ${successCount}/${textChannels.size}${failedCount ? `\n**Failed:** ${failedCount}` : ""}`,
+          `**__Channels Unlocked__**: ${successCount}/${textChannels.size}` +
+          (failedCount ? `\n**__Failed__**: ${failedCount}` : ""),
         color: "57F287",
         footer: "L • Moderation",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );

@@ -38,12 +38,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "All Channels Unlocked",
-        titleEmoji: "🔓",
-        description: `Unlocked **${success}/${total}** channels.${failed ? `\nFailed: **${failed}** (missing permissions).` : ""}`,
+        description:
+          `**__Unlocked__**: ${success}/${total} channels` +
+          (failed ? `\n**__Failed__**: ${failed} (missing permissions)` : ""),
         color: "57F287",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       interaction.guild,
       { success, total, failed }
@@ -62,12 +63,13 @@ module.exports = {
     const embed = buildFromConfig(
       {
         title: "All Channels Unlocked",
-        titleEmoji: "🔓",
-        description: `Unlocked **${success}/${total}** channels.${failed ? `\nFailed: **${failed}** (missing permissions).` : ""}`,
+        description:
+          `**__Unlocked__**: ${success}/${total} channels` +
+          (failed ? `\n**__Failed__**: ${failed} (missing permissions)` : ""),
         color: "57F287",
         footer: "L • Moderation",
-        footerEmoji: "🛡️",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       message.guild,
       { success, total, failed }

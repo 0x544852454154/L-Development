@@ -30,24 +30,23 @@ async function sendInfo(ctx, guild) {
   const boostCount = guild.premiumSubscriptionCount || 0;
 
   const description =
-    `**ID:** ${guild.id}\n` +
-    `**Owner:** ${owner ? `${owner.user.tag} (${owner.user.id})` : "Unknown"}\n` +
-    `**Members:** ${guild.memberCount}\n` +
-    `**Channels:** ${channels} (${textChannels} text • ${voiceChannels} voice)\n` +
-    `**Roles:** ${roles}\n` +
-    `**Boosts:** ${boostCount} (${boostLevel})\n` +
-    `**Created:** ${created}`;
+    `**__ID__**: ${guild.id}\n` +
+    `**__Owner__**: ${owner ? `${owner.user.tag} (${owner.user.id})` : "Unknown"}\n` +
+    `**__Members__**: ${guild.memberCount}\n` +
+    `**__Channels__**: ${channels} (${textChannels} text • ${voiceChannels} voice)\n` +
+    `**__Roles__**: ${roles}\n` +
+    `**__Boosts__**: ${boostCount} (${boostLevel})\n` +
+    `**__Created__**: ${created}`;
 
   const embed = buildFromConfig(
     {
       title: guild.name,
-      titleEmoji: "🏰",
       description,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
-      thumbnailUrl: guild.iconURL(),
+      footerIcon: "bot",
+      showTimestamp: false,
+      thumbnail: "guild",
     },
     guild
   );

@@ -57,13 +57,14 @@ function run(ctx, guild, user, action) {
   const cfg = {
     title: "Anti-Webhook Status",
     description:
-      `**Anti-Webhook:** ${data.antinuke.antiWebhook ? "ON" : "OFF"}\n` +
-      `**Antinuke Shield:** ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}\n` +
-      `**Whitelisted Users:** ${data.antinuke.whitelistedUsers.length}\n` +
-      `**Whitelisted Roles:** ${data.antinuke.whitelistedRoles.length}`,
-    color: data.antinuke.antiWebhook ? "57F287" : "949BA4",
+      `**__Anti-Webhook__**: ${data.antinuke.antiWebhook ? "ON" : "OFF"}\n` +
+      `**__Antinuke Shield__**: ${data.antinuke.enabled ? "ONLINE" : "OFFLINE"}\n` +
+      `**__Whitelisted Users__**: ${data.antinuke.whitelistedUsers.length}\n` +
+      `**__Whitelisted Roles__**: ${data.antinuke.whitelistedRoles.length}`,
+    color: data.antinuke.antiWebhook ? "57F287" : "2B2D31",
     footer: "L • Antinuke",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

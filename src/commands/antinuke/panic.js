@@ -66,12 +66,13 @@ function run(ctx, guild, user, action) {
   const cfg = {
     title: "Panic Mode Status",
     description:
-      `**Panic Mode:** ${a.panicMode && remaining > 0 ? `ACTIVE (${remaining}s remaining)` : "CLEAR"}\n` +
-      `**Raid Action:** ${a.action || "kick"}\n` +
-      `**Anti-Raid Shield:** ${a.enabled ? "ONLINE" : "OFFLINE"}`,
+      `**__Panic Mode__**: ${a.panicMode && remaining > 0 ? `ACTIVE (${remaining}s remaining)` : "CLEAR"}\n` +
+      `**__Raid Action__**: ${a.action || "kick"}\n` +
+      `**__Anti-Raid Shield__**: ${a.enabled ? "ONLINE" : "OFFLINE"}`,
     color: a.panicMode && remaining > 0 ? "ED4245" : "57F287",
     footer: "L • Anti-Raid",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

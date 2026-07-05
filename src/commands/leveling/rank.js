@@ -39,15 +39,14 @@ function sendRank(ctx, guild, user) {
   const embed = buildFromConfig(
     {
       title: `${user.tag}'s Rank`,
-      titleEmoji: "🏆",
       description:
-        `**Level:** ${level}\n` +
-        `**XP:** ${xp} / ${needed}\n` +
+        `**__Level__**: ${level}\n` +
+        `**__XP__**: ${xp} / ${needed}\n` +
         `\`${bar}\` ${progress}%`,
       color: "F1C40F",
       footer: "L • Leveling",
-      footerEmoji: "🏆",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
       thumbnailUrl: user.displayAvatarURL(),
     },
     guild

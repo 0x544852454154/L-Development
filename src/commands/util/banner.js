@@ -33,12 +33,11 @@ async function sendBanner(ctx, guild, user, client) {
   const embed = buildFromConfig(
     {
       title: `${user.tag}'s Banner`,
-      titleEmoji: "🎌",
       description: `[Open in browser](${banner})`,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
       imageUrl: banner,
     },
     guild

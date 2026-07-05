@@ -30,12 +30,11 @@ function sendAvatar(ctx, guild, user) {
   const embed = buildFromConfig(
     {
       title: `${user.tag}'s Avatar`,
-      titleEmoji: "🖼️",
       description: `[PNG](${png}) • [WebP](${webp}) • [JPG](${jpg})`,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
       imageUrl: png,
     },
     guild

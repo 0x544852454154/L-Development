@@ -118,14 +118,15 @@ function run(ctx, guild, user, action, opts = {}) {
   const cfg = {
     title: "Anti-Raid Status",
     description:
-      `**Shield:** ${a.enabled ? "ONLINE" : "OFFLINE"}\n` +
-      `**Join Threshold:** ${a.joinThreshold} joins / ${(a.joinWindow || 10000) / 1000}s\n` +
-      `**Raid Action:** ${a.action}\n` +
-      `**Min Account Age:** ${a.minAccountAge > 0 ? `${Math.round(a.minAccountAge / 3600000)}h` : "off"}\n` +
-      `**Panic Mode:** ${a.panicMode ? `ACTIVE${panicRemaining ? ` (${panicRemaining}s remaining)` : ""}` : "clear"}`,
-    color: a.enabled ? (a.panicMode ? "ED4245" : "57F287") : "949BA4",
+      `**__Shield__**: ${a.enabled ? "ONLINE" : "OFFLINE"}\n` +
+      `**__Join Threshold__**: ${a.joinThreshold} joins / ${(a.joinWindow || 10000) / 1000}s\n` +
+      `**__Raid Action__**: ${a.action}\n` +
+      `**__Min Account Age__**: ${a.minAccountAge > 0 ? `${Math.round(a.minAccountAge / 3600000)}h` : "off"}\n` +
+      `**__Panic Mode__**: ${a.panicMode ? `ACTIVE${panicRemaining ? ` (${panicRemaining}s remaining)` : ""}` : "clear"}`,
+    color: a.enabled ? (a.panicMode ? "ED4245" : "57F287") : "2B2D31",
     footer: "L • Anti-Raid",
-    showTimestamp: true,
+    footerIcon: "bot",
+    showTimestamp: false,
   };
   const embed = buildFromConfig(cfg, guild);
   return ctx.reply({ embeds: [embed] });

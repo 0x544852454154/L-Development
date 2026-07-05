@@ -32,12 +32,11 @@ function setAfk(ctx, guild, user, msg) {
   const embed = buildFromConfig(
     {
       title: "You are now AFK",
-      titleEmoji: "💤",
-      description: `I've set your status to **AFK**.\n**Message:** ${msg}\n\nYou'll be marked back automatically the next time you speak.`,
+      description: `**__Status__**: AFK\n**__Message__**: ${msg}\n\nYou'll be marked back automatically the next time you speak.`,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
       thumbnailUrl: user.displayAvatarURL(),
     },
     guild

@@ -29,13 +29,12 @@ async function sendCount(ctx, guild) {
   const embed = buildFromConfig(
     {
       title: `${guild.name} — Members`,
-      titleEmoji: "👥",
-      description: `**Total:** ${total}\n**Humans:** ${humans}\n**Bots:** ${bots}\n**Online (cached):** ${online}`,
+      description: `**__Total__**: ${total}\n**__Humans__**: ${humans}\n**__Bots__**: ${bots}\n**__Online (cached)__**: ${online}`,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
-      thumbnailUrl: guild.iconURL(),
+      footerIcon: "bot",
+      showTimestamp: false,
+      thumbnail: "guild",
     },
     guild
   );

@@ -47,12 +47,11 @@ function sendDef(ctx, guild, word) {
     embed = buildFromConfig(
       {
         title: `Definition: ${word}`,
-        titleEmoji: "📖",
         description: def,
         color: "2B2D31",
-        footer: "L • Mini Dictionary",
-        footerEmoji: "📚",
-        showTimestamp: true,
+        footer: "L • Util",
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );
@@ -61,12 +60,11 @@ function sendDef(ctx, guild, word) {
     embed = buildFromConfig(
       {
         title: "Not In Dictionary",
-        titleEmoji: "🔍",
-        description: `**${word}** isn't in L's mini-dictionary yet.\n\nTry one of: ${known}`,
+        description: `**__Word__**: ${word}\nNot in L's mini-dictionary yet.\n\n**__Try one of__**: ${known}`,
         color: "F1C40F",
-        footer: "L • Mini Dictionary",
-        footerEmoji: "📚",
-        showTimestamp: true,
+        footer: "L • Util",
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );

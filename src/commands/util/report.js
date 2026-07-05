@@ -39,11 +39,10 @@ async function doReport(ctx, guild, reporter, target, reason, ephemeral) {
   const reportEmbed = buildFromConfig(
     {
       title: "New Member Report",
-      titleEmoji: "🚩",
-      description: `**Reported:** ${target} (\`${target.id}\`)\n**By:** ${reporter} (\`${reporter.id}\`)\n**Reason:** ${reason}`,
+      description: `**__Reported__**: ${target} (\`${target.id}\`)\n**__By__**: ${reporter} (\`${reporter.id}\`)\n**__Reason__**: ${reason}`,
       color: "ED4245",
-      footer: "L • Reports",
-      footerEmoji: "🔧",
+      footer: "L • Util",
+      footerIcon: "bot",
       showTimestamp: true,
       thumbnailUrl: target.displayAvatarURL(),
     },

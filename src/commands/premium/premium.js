@@ -3,7 +3,7 @@ const config = require("../../config");
 const { sendEmbed, buildFromConfig } = require("../../embedBuilder");
 
 const UPGRADE_NOTE =
-  "💎 **Want Premium for your server?**\n" +
+  "**Want Premium for your server?**\n" +
   "Premium unlocks anti-alt detection, autorole, booster role, mass role/unban, and full server identity control (avatar, banner, bio).\n" +
   `Visit L's official support server or contact the bot owner <@${config.ownerId || "unknown"}> to upgrade.`;
 
@@ -23,11 +23,10 @@ module.exports = {
     const followup = buildFromConfig(
       {
         title: "How to Get Premium",
-        titleEmoji: "💎",
         description: UPGRADE_NOTE,
         color: "F1C40F",
         footer: "L • Premium",
-        footerEmoji: "👑",
+        footerIcon: "bot",
         showTimestamp: false,
       },
       interaction.guild,
@@ -42,11 +41,10 @@ module.exports = {
     const followup = buildFromConfig(
       {
         title: "How to Get Premium",
-        titleEmoji: "💎",
         description: UPGRADE_NOTE,
         color: "F1C40F",
         footer: "L • Premium",
-        footerEmoji: "👑",
+        footerIcon: "bot",
         showTimestamp: false,
       },
       message.guild,

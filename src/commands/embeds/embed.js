@@ -77,7 +77,7 @@ module.exports = {
     if (action === "list") {
       const lines = EMBED_OPTIONS.map((o) => `\`${o.key}\` — ${o.label}`);
       const embed = buildFromConfig(
-        { title: "Editable Embeds", description: lines.join("\n"), color: "2B2D31", footer: "Use /embed edit <key>", showTimestamp: false },
+        { title: "Editable Embeds", description: lines.join("\n"), color: "2B2D31", footer: "L • Embeds", footerIcon: "bot", showTimestamp: false },
         interaction.guild
       );
       return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -90,7 +90,7 @@ module.exports = {
         .addOptions(EMBED_OPTIONS.map((o) => new StringSelectMenuOptionBuilder().setLabel(o.label).setValue(o.key).setDescription(o.cat)));
       const row = new ActionRowBuilder().addComponents(select);
       const embed = buildFromConfig(
-        { title: "Embed Customizer", description: `Pick the embed you want to **${action}**.\n\nPlaceholders: \`{user}\`, \`{server}\`, \`{count}\`, \`{reason}\`, \`{channel}\`, \`{detail}\`, \`{executor}\`, \`{action}\`, \`{duration}\``, color: "2B2D31", footer: "L • Embed Customizer", showTimestamp: false },
+        { title: "Embed Customizer", description: `Pick the embed you want to **__${action}__**.\n\nPlaceholders: \`{user}\`, \`{server}\`, \`{count}\`, \`{reason}\`, \`{channel}\`, \`{detail}\`, \`{executor}\`, \`{action}\`, \`{duration}\``, color: "2B2D31", footer: "L • Embeds", footerIcon: "bot", showTimestamp: false },
         interaction.guild
       );
       return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
@@ -107,7 +107,7 @@ module.exports = {
       updateGuild(interaction.guild.id, (d) => {
         if (DEFAULT_EMBEDS[embedKey]) d.embeds[embedKey] = JSON.parse(JSON.stringify(DEFAULT_EMBEDS[embedKey]));
       });
-      const embed = buildFromConfig({ title: "Embed Reset", description: `Embed \`${embedKey}\` was reset to its default.`, color: "57F287", footer: "L • Embed Customizer", showTimestamp: true }, interaction.guild);
+      const embed = buildFromConfig({ title: "Embed Reset", description: `Embed \`${embedKey}\` was reset to its default.`, color: "57F287", footer: "L • Embeds", footerIcon: "bot", showTimestamp: false }, interaction.guild);
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
@@ -179,7 +179,7 @@ module.exports = {
     if (action === "list" || !args[1]) {
       const lines = EMBED_OPTIONS.map((o) => `\`${o.key}\``);
       const embed = buildFromConfig(
-        { title: "Embed Customizer", description: `**Usage:**\n\`${data.prefix}embed edit <key>\` — customize (use slash for full editor)\n\`${data.prefix}embed view <key>\` — preview\n\`${data.prefix}embed reset <key>\` — reset\n\n**Editable embeds:**\n${lines.join("\n")}`, color: "2B2D31", footer: "L • Embed Customizer", showTimestamp: false },
+        { title: "Embed Customizer", description: `**__Usage__**:\n\`${data.prefix}embed edit <key>\` — customize (use slash for full editor)\n\`${data.prefix}embed view <key>\` — preview\n\`${data.prefix}embed reset <key>\` — reset\n\n**__Editable embeds__**:\n${lines.join("\n")}`, color: "2B2D31", footer: "L • Embeds", footerIcon: "bot", showTimestamp: false },
         message.guild
       );
       return message.reply({ embeds: [embed] });

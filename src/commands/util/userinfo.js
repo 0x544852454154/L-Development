@@ -38,23 +38,22 @@ function sendInfo(ctx, guild, user, member) {
   const bot = user.bot ? "Yes" : "No";
 
   const description =
-    `**Username:** ${user.tag}\n` +
-    `**ID:** ${user.id}\n` +
-    `**Bot:** ${bot}\n` +
-    `**Account Created:** ${created}\n` +
-    `**Joined Server:** ${joined}\n` +
-    `**Roles [${rolesCount}]:** ${rolesCount > 0 ? roles.slice(0, 10).join(", ") + (rolesCount > 10 ? ` … +${rolesCount - 10}` : "") : "None"}\n` +
-    `**Top Role:** ${topRole}`;
+    `**__Username__**: ${user.tag}\n` +
+    `**__ID__**: ${user.id}\n` +
+    `**__Bot__**: ${bot}\n` +
+    `**__Account Created__**: ${created}\n` +
+    `**__Joined Server__**: ${joined}\n` +
+    `**__Roles [${rolesCount}]__**: ${rolesCount > 0 ? roles.slice(0, 10).join(", ") + (rolesCount > 10 ? ` … +${rolesCount - 10}` : "") : "None"}\n` +
+    `**__Top Role__**: ${topRole}`;
 
   const embed = buildFromConfig(
     {
       title: user.tag,
-      titleEmoji: "👤",
       description,
       color: "2B2D31",
       footer: "L • Util",
-      footerEmoji: "🔧",
-      showTimestamp: true,
+      footerIcon: "bot",
+      showTimestamp: false,
       thumbnailUrl: user.displayAvatarURL(),
     },
     guild

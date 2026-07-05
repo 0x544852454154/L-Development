@@ -65,12 +65,11 @@ async function doNuke(ctx, guild, channel, actor) {
     const embed = buildFromConfig(
       {
         title: "Channel Nuked",
-        titleEmoji: "💥",
-        description: `**#${clone.name}** was wiped and recreated by ${actor}.\nA clean slate — as it should be.`,
+        description: `**__Channel__**: #${clone.name}\n**__Nuked by__**: ${actor}\n\nA clean slate — as it should be.`,
         color: "57F287",
         footer: "L • Util",
-        footerEmoji: "🔧",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );

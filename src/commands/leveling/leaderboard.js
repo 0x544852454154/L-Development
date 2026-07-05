@@ -34,12 +34,11 @@ function sendLeaderboard(ctx, guild) {
     const embed = buildFromConfig(
       {
         title: "Leaderboard Empty",
-        titleEmoji: "🏆",
         description: "No one has earned XP yet.\nEnable leveling with `/leveling on` and start chatting!",
         color: "F1C40F",
         footer: "L • Leveling",
-        footerEmoji: "🏆",
-        showTimestamp: true,
+        footerIcon: "bot",
+        showTimestamp: false,
       },
       guild
     );
@@ -55,13 +54,12 @@ function sendLeaderboard(ctx, guild) {
   const embed = buildFromConfig(
     {
       title: `${guild.name} — Top Members`,
-      titleEmoji: "🏆",
       description: lines.join("\n"),
       color: "F1C40F",
       footer: "L • Leveling",
-      footerEmoji: "🏆",
-      showTimestamp: true,
-      thumbnailUrl: guild.iconURL(),
+      footerIcon: "bot",
+      showTimestamp: false,
+      thumbnail: "guild",
     },
     guild
   );
