@@ -65,10 +65,15 @@ module.exports = {
       return error(message, message.guild, `Failed to purge: ${e.message}`);
     }
 
-    const reply = await sendEmbed(message, "purge_success", message.guild, {
+    // IMPORTANT: use channel.send, NOT message.reply — the invoking message was
+    // just bulk-deleted, so message.reply() would reference a non-existent
+    // message and crash with MESSAGE_REFERENCE_UNKNOWN_MESSAGE.
+    const { buildEmbed } = require("../../embedBuilder");
+    const embed = buildEmbed("purge_success", message.guild, {
       count: deleted.size,
       channel: channel.toString(),
     });
+    const reply = await channel.send({ embeds: [embed] }).catch(() => null);
     setTimeout(() => {
       if (reply && reply.deletable) reply.delete().catch(() => {});
     }, 3000);

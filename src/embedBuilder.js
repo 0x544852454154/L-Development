@@ -111,6 +111,12 @@ async function sendEmbed(ctx, embedKey, guild, vars = {}, options = {}) {
   const embed = buildEmbed(embedKey, guild, vars);
   const payload = { embeds: [embed], ...options };
   if (typeof ctx.reply === "function") {
+    // For Message replies, set failIfNotExists:false so we never crash when
+    // the referenced message was deleted (e.g. after a purge).
+    // Interactions ignore this option.
+    if (ctx.guild !== undefined && ctx.channel) {
+      return ctx.reply({ ...payload, failIfNotExists: false });
+    }
     return ctx.reply(payload);
   }
   return ctx.channel.send(payload);

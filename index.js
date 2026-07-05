@@ -76,12 +76,25 @@ client.once(Events.ClientReady, (c) => {
   logger.log(`[ready] ${c.user.tag} online — serving ${c.guilds.cache.size} guilds`);
   c.user.setActivity("for nukes", { type: 3 }); // Watching
 
-  // Cache all existing channels/roles so auto-restore can revert them
-  for (const guild of c.guilds.cache.values()) {
-    guild.channels.cache.forEach((ch) => antinuke.cacheChannel(ch));
-    guild.roles.cache.forEach((r) => antinuke.cacheRole(r));
+  // Cache all existing channels/roles so auto-restore can revert them.
+  // Wrap in try/catch so one bad channel never crashes startup.
+  try {
+    for (const guild of c.guilds.cache.values()) {
+      guild.channels.cache.forEach((ch) => {
+        try { antinuke.cacheChannel(ch); } catch (e) {
+          logger.warn(`[ready] skipped channel ${ch.id} in ${guild.name}: ${e.message}`);
+        }
+      });
+      guild.roles.cache.forEach((r) => {
+        try { antinuke.cacheRole(r); } catch (e) {
+          logger.warn(`[ready] skipped role ${r.id} in ${guild.name}: ${e.message}`);
+        }
+      });
+    }
+    logger.log("[ready] cached channels & roles for auto-restore");
+  } catch (e) {
+    logger.error("[ready] caching failed (non-fatal):", e.message);
   }
-  logger.log("[ready] cached channels & roles for auto-restore");
 
   // Initialize guild data for any guild missing a config file
   for (const guild of c.guilds.cache.values()) {

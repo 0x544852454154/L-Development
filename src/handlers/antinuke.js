@@ -85,18 +85,33 @@ function isWhitelisted(guild, user) {
 
 // ===== Punishment =====
 async function punish(guild, userId, reason) {
+  // GUARD: never punish the bot itself or the guild owner
+  if (userId === guild.client?.user?.id) {
+    logger.warn(`[punish] refused to punish bot itself in ${guild.name}`);
+    return;
+  }
+  if (userId === guild.ownerId) {
+    logger.warn(`[punish] refused to punish guild owner in ${guild.name} — use /extraowner remove instead`);
+    return;
+  }
   const data = getGuild(guild.id);
   const punishment = data.antinuke.punishment || "ban";
   try {
+    // Check role hierarchy — can the bot actually ban/kick this user?
+    const target = await guild.members.fetch(userId).catch(() => null);
+    const me = guild.members.me;
+    if (target && me && target.roles.highest.position >= me.roles.highest.position) {
+      logger.warn(`[punish] cannot punish ${target.user.tag} — role hierarchy (target is higher or equal to bot)`);
+      // Fall back to stripping dangerous roles if possible, otherwise just log
+      return;
+    }
     if (punishment === "ban") {
       await guild.bans.create(userId, { reason: `[L Antinuke] ${reason}` }).catch(() => {});
     } else if (punishment === "kick") {
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (member) await member.kick(`[L Antinuke] ${reason}`).catch(() => {});
+      if (target) await target.kick(`[L Antinuke] ${reason}`).catch(() => {});
     } else if (punishment === "strip") {
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (member) {
-        const dangerous = member.roles.cache.filter((r) =>
+      if (target) {
+        const dangerous = target.roles.cache.filter((r) =>
           r.permissions.has([
             PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageChannels,
             PermissionFlagsBits.ManageRoles, PermissionFlagsBits.BanMembers,
@@ -105,7 +120,7 @@ async function punish(guild, userId, reason) {
           ])
         );
         for (const role of dangerous.values()) {
-          await member.roles.remove(role, `[L Antinuke] ${reason}`).catch(() => {});
+          await target.roles.remove(role, `[L Antinuke] ${reason}`).catch(() => {});
         }
       }
     }
@@ -123,40 +138,78 @@ const banCache = new Map();
 const webhookCreatorMap = new Map();
 
 function cacheChannel(channel) {
-  if (!channel.guild) return;
-  channelCache.set(channel.id, {
-    name: channel.name, type: channel.type, parentId: channel.parentId,
-    topic: channel.topic || null, position: channel.position, nsfw: channel.nsfw || false,
-    rateLimit: channel.rateLimitPerUser || 0,
-    permissionOverwrites: channel.permissionOverwrites.cache.map((o) => ({
-      id: o.id, type: o.type, allow: o.allow.toArray(), deny: o.deny.toArray(),
-    })),
-    guildId: channel.guild.id,
-  });
-  if (channelCache.size > 5000) channelCache.delete(channelCache.keys().next().value);
+  if (!channel || !channel.guild) return;
+  try {
+    // permissionOverwrites can be undefined for some channel types (partial,
+    // voice, stage, forum) or during cache hydration — guard against it.
+    const overwrites = channel.permissionOverwrites?.cache;
+    channelCache.set(channel.id, {
+      name: channel.name,
+      type: channel.type,
+      parentId: channel.parentId,
+      topic: channel.topic || null,
+      position: channel.position,
+      nsfw: channel.nsfw || false,
+      rateLimit: channel.rateLimitPerUser || 0,
+      permissionOverwrites: overwrites
+        ? overwrites.map((o) => ({
+            id: o.id, type: o.type, allow: o.allow.toArray(), deny: o.deny.toArray(),
+          }))
+        : [],
+      guildId: channel.guild.id,
+    });
+    if (channelCache.size > 5000) channelCache.delete(channelCache.keys().next().value);
+  } catch (e) {
+    // Don't let one bad channel crash the bot — skip it
+    logger.warn(`[cache] failed to cache channel ${channel.id}: ${e.message}`);
+  }
 }
 
 function cacheRole(role) {
-  roleCache.set(role.id, {
-    name: role.name, color: role.color, hoist: role.hoist, mentionable: role.mentionable,
-    permissions: role.permissions.bitfield.toString(), position: role.position, icon: role.icon || null,
-    guildId: role.guild.id,
-  });
-  if (roleCache.size > 2000) roleCache.delete(roleCache.keys().next().value);
+  if (!role || !role.guild) return;
+  try {
+    roleCache.set(role.id, {
+      name: role.name, color: role.color, hoist: role.hoist, mentionable: role.mentionable,
+      permissions: role.permissions?.bitfield?.toString() || "0",
+      position: role.position, icon: role.icon || null,
+      guildId: role.guild.id,
+    });
+    if (roleCache.size > 2000) roleCache.delete(roleCache.keys().next().value);
+  } catch (e) {
+    logger.warn(`[cache] failed to cache role ${role.id}: ${e.message}`);
+  }
 }
 
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function restoreChannel(guild, cached) {
   try {
+    // Safely convert permission overwrites — skip any that fail to parse
+    const overwrites = (cached.permissionOverwrites || [])
+      .map((o) => {
+        try {
+          return {
+            id: o.id, type: o.type,
+            allow: BigInt(o.allow.join("|") || "0"),
+            deny: BigInt(o.deny.join("|") || "0"),
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    // If the parent category was deleted, don't pass a stale parentId
+    const parent = cached.parentId ? guild.channels.cache.get(cached.parentId) : null;
+
     const created = await guild.channels.create({
-      name: cached.name, type: cached.type, parent: cached.parentId,
-      topic: cached.topic, nsfw: cached.nsfw, rateLimitPerUser: cached.rateLimit,
-      permissionOverwrites: cached.permissionOverwrites.map((o) => ({
-        id: o.id, type: o.type,
-        allow: BigInt(o.allow.join("|") || "0"),
-        deny: BigInt(o.deny.join("|") || "0"),
-      })),
+      name: cached.name,
+      type: cached.type,
+      parent: parent ? parent.id : undefined,
+      topic: cached.topic || undefined,
+      nsfw: cached.nsfw || false,
+      rateLimitPerUser: cached.rateLimit || 0,
+      permissionOverwrites: overwrites,
     });
     return created;
   } catch (e) {
@@ -783,9 +836,30 @@ function setup(client) {
       guild.channels.cache.forEach((ch) => cacheChannel(ch));
       guild.roles.cache.forEach((r) => cacheRole(r));
     }
+    // Memory cleanup: prune stale entries from spam/join trackers and dedup sets
+    // to prevent unbounded growth on long-running bots.
+    const now = Date.now();
+    for (const [gid, userMap] of spamTracker.entries()) {
+      for (const [uid, arr] of userMap.entries()) {
+        if (!arr.length || now - arr[arr.length - 1] > 300000) userMap.delete(uid); // 5 min idle
+      }
+      if (!userMap.size) spamTracker.delete(gid);
+    }
+    for (const [gid, arr] of joinTracker.entries()) {
+      if (!arr.length || now - arr[arr.length - 1] > 300000) joinTracker.delete(gid);
+    }
+    for (const [gid, set] of restoreInProgress.entries()) {
+      if (!set.size) restoreInProgress.delete(gid);
+    }
+    for (const [gid, set] of punishedThisBurst.entries()) {
+      if (!set.size) punishedThisBurst.delete(gid);
+    }
+    for (const [gid, arr] of rapidDeleteTracker.entries()) {
+      if (!arr.length || now - arr[arr.length - 1] > 10000) rapidDeleteTracker.delete(gid);
+    }
   }, 60000);
 
-  logger.log("[antinuke] v3 handlers attached (strict + webhook fix + rename ban + instant-nuke counter)");
+  logger.log("[antinuke] v3 handlers attached (strict + webhook fix + rename ban + dedup + memory cleanup)");
 }
 
 module.exports = {

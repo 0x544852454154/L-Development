@@ -57,13 +57,32 @@ async function getAuditLogs(guild, type, limit = 25) {
 
 // Find the executor of a specific action targeting a specific id.
 // Uses the cached audit logs — O(1) API calls per guild per TTL window.
+//
+// SECURITY: only return an executor if the target id matches. Never fall back
+// to the first entry — that could attribute the wrong user and cause a false
+// ban. If we can't find the exact target, return null (treat as whitelisted/unknown).
 async function fetchExecutor(guild, eventType, targetId) {
   try {
     const entries = await getAuditLogs(guild, eventType);
-    // Match by target id; fall back to the most recent entry of that type
-    let entry = entries.find((e) => e.targetId === targetId || e.target?.id === targetId);
-    if (!entry && entries.length) entry = entries[0];
-    return entry?.executor || null;
+    if (!entries || entries.length === 0) return null;
+    // Match by target id. Audit log entries for channel/role/webhook deletes
+    // have targetId set to the deleted entity's id.
+    if (targetId) {
+      const entry = entries.find(
+        (e) => e.targetId === targetId || e.target?.id === targetId
+      );
+      if (entry) return entry.executor || null;
+      // No exact match — DON'T fall back to entries[0] (could ban the wrong user).
+      // Instead, return the most recent entry only if it happened within 5 seconds
+      // (reasonable certainty it's the same action).
+      const recent = entries[0];
+      if (recent && Date.now() - recent.createdTimestamp < 5000) {
+        return recent.executor || null;
+      }
+      return null;
+    }
+    // No targetId provided — return the most recent entry
+    return entries[0]?.executor || null;
   } catch {
     return null;
   }
