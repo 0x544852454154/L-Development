@@ -56,6 +56,22 @@ function isRapidBurst(guildId) {
   return arr.length >= 3; // 3+ deletions in 2s = instant nuke
 }
 
+// ===== Dedup sets — prevent double-restore and double-punish =====
+// restoreInProgress: guildId -> Set<entityId> — channels/roles being restored
+// punishedThisBurst: guildId -> Set<userId> — users already punished in the current burst
+// These prevent the race condition where concurrent delete events double-restore
+// the same channel (the #1 cause of duplicate channels).
+const restoreInProgress = new Map();
+const punishedThisBurst = new Map();
+function getRestoreSet(guildId) {
+  if (!restoreInProgress.has(guildId)) restoreInProgress.set(guildId, new Set());
+  return restoreInProgress.get(guildId);
+}
+function getPunishedSet(guildId) {
+  if (!punishedThisBurst.has(guildId)) punishedThisBurst.set(guildId, new Set());
+  return punishedThisBurst.get(guildId);
+}
+
 // ===== Whitelist check =====
 function isWhitelisted(guild, user) {
   const data = getGuild(guild.id);
@@ -234,7 +250,7 @@ function setup(client) {
     banCache.get(ban.guild.id).set(ban.user.id, { reason: ban.reason || null, at: Date.now() });
   });
 
-  // ====== CHANNEL DELETE (with instant-nuke counter) ======
+  // ====== CHANNEL DELETE (deduped — NO duplicate channels) ======
   client.on("channelDelete", async (channel) => {
     if (!channel.guild) return;
     const data = getGuild(channel.guild.id);
@@ -245,66 +261,72 @@ function setup(client) {
 
     recordAction(channel.guild.id, "channelDelete", executor.id, channel.id);
 
-    // --- INSTANT-NUKE COUNTER: 3+ deletions in 2s = emergency lockdown ---
-    if (data.antinuke.strict && isRapidBurst(channel.guild.id)) {
-      // BAN FIRST — stop the nuke immediately
-      await punish(channel.guild, executor.id, `Mass channel deletion (emergency lockdown — rapid burst)`);
-      logger.log(`[antinuke] EMERGENCY LOCKDOWN: banned ${executor.tag} for instant-nuke in ${channel.guild.name}`);
+    // DEDUP: never restore the same channel twice (prevents duplicate channels)
+    const restoreSet = getRestoreSet(channel.guild.id);
+    if (restoreSet.has(channel.id)) return;
+    restoreSet.add(channel.id);
 
-      // Batch-restore ALL deleted channels in parallel (groups of 5 for rate limits)
-      if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
-        const tracker = getTracker(channel.guild.id, "channelDelete");
-        const toRestore = tracker.filter((a) => a.executorId === executor.id);
-        const restoreBatch = [];
-        for (const action of toRestore) {
-          const cached = channelCache.get(action.targetId);
-          if (cached) {
-            restoreBatch.push(() => restoreChannel(channel.guild, cached).then(() => channelCache.delete(action.targetId)));
-          }
-        }
-        // Restore in groups of 5 to respect Discord rate limits (5 creates / 2s / guild)
-        for (let i = 0; i < restoreBatch.length; i += 5) {
-          await Promise.allSettled(restoreBatch.slice(i, i + 5).map((fn) => fn()));
-          if (i + 5 < restoreBatch.length) await delay(2100);
-        }
-        logger.log(`[antinuke] batch-restored ${restoreBatch.length} channels after instant-nuke`);
-      }
-
-      await alertGuild(channel.guild, "antinuke_triggered", {
-        action: "instant nuke (mass channel deletion)",
-        executor: executor.tag,
-        detail: `Emergency lockdown: rapid channel deletion detected. Offender banned. All channels restored.`,
-      });
-      actionTracker.get(channel.guild.id).set("channelDelete", []);
-      rapidDeleteTracker.set(channel.guild.id, []);
-      return;
-    }
-
-    // --- STRICT MODE: immediate punishment on ANY single deletion ---
+    // --- STRICT MODE: restore THIS channel + punish (deduped) ---
     if (data.antinuke.strict) {
+      // 1. Restore the single deleted channel (one create = one delete, no duplicates)
       if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
         const cached = channelCache.get(channel.id);
-        if (cached) { await restoreChannel(channel.guild, cached); channelCache.delete(channel.id); }
+        if (cached) {
+          await restoreChannel(channel.guild, cached).catch(() => {});
+          channelCache.delete(channel.id);
+        }
       }
-      await punish(channel.guild, executor.id, `Unauthorized channel deletion (#${channel.name})`);
+
+      // 2. Punish (deduped — don't ban the same user 50 times in a burst)
+      const punishedSet = getPunishedSet(channel.guild.id);
+      if (!punishedSet.has(executor.id)) {
+        punishedSet.add(executor.id);
+        await punish(channel.guild, executor.id, `Unauthorized channel deletion (#${channel.name})`);
+      }
+
+      // 3. Alert (check for rapid burst for a stronger alert message)
+      const burst = isRapidBurst(channel.guild.id);
+      if (burst) {
+        // Clear burst trackers so the alert doesn't repeat for every channel in the burst
+        rapidDeleteTracker.set(channel.guild.id, []);
+        actionTracker.get(channel.guild.id).set("channelDelete", []);
+        // Clear the punished set after the burst settles
+        setTimeout(() => punishedSet.delete(executor.id), 15000);
+      }
       await alertGuild(channel.guild, "antinuke_triggered", {
-        action: "channel deletion", executor: executor.tag,
-        detail: `Deleted channel #${channel.name} — restored and offender punished.`,
+        action: burst ? "mass channel deletion (emergency)" : "channel deletion",
+        executor: executor.tag,
+        detail: burst
+          ? `Rapid channel deletion burst detected. Offender banned. Channel #${channel.name} restored.`
+          : `Deleted channel #${channel.name} — restored and offender punished.`,
       });
+
+      // Clean up the dedup entry after the restore is definitely complete
+      setTimeout(() => restoreSet.delete(channel.id), 30000);
       return;
     }
 
-    // --- Threshold mode (legacy) ---
+    // --- Threshold mode (legacy) — also deduped ---
     const count = countActions(channel.guild.id, "channelDelete");
     if (count >= data.antinuke.threshold) {
       if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
         const tracker = getTracker(channel.guild.id, "channelDelete");
         for (const action of tracker.filter((a) => a.executorId === executor.id)) {
+          if (restoreSet.has(action.targetId)) continue; // skip already-restored
+          restoreSet.add(action.targetId);
           const cached = channelCache.get(action.targetId);
-          if (cached) { await restoreChannel(channel.guild, cached); channelCache.delete(action.targetId); }
+          if (cached) {
+            await restoreChannel(channel.guild, cached).catch(() => {});
+            channelCache.delete(action.targetId);
+          }
+          setTimeout(() => restoreSet.delete(action.targetId), 30000);
         }
       }
-      await punish(channel.guild, executor.id, `Mass channel deletion (${count})`);
+      const punishedSet = getPunishedSet(channel.guild.id);
+      if (!punishedSet.has(executor.id)) {
+        punishedSet.add(executor.id);
+        await punish(channel.guild, executor.id, `Mass channel deletion (${count})`);
+      }
       await alertGuild(channel.guild, "antinuke_triggered", { action: `mass channel deletion (${count})`, executor: executor.tag });
       actionTracker.get(channel.guild.id).set("channelDelete", []);
     }
@@ -447,7 +469,7 @@ function setup(client) {
     }
   });
 
-  // ====== STRICT ROLE DELETE ======
+  // ====== STRICT ROLE DELETE (deduped — NO duplicate roles) ======
   client.on("roleDelete", async (role) => {
     const data = getGuild(role.guild.id);
     if (!data.antinuke.enabled) return;
@@ -456,13 +478,27 @@ function setup(client) {
 
     recordAction(role.guild.id, "roleDelete", executor.id, role.id);
 
+    // DEDUP: never restore the same role twice (prevents duplicate roles)
+    const restoreSet = getRestoreSet(role.guild.id);
+    if (restoreSet.has(role.id)) return;
+    restoreSet.add(role.id);
+
     if (data.antinuke.strict) {
       if (data.autoRestore.enabled && data.autoRestore.restoreRoles) {
         const cached = roleCache.get(role.id);
-        if (cached) { await restoreRole(role.guild, cached); roleCache.delete(role.id); }
+        if (cached) {
+          await restoreRole(role.guild, cached).catch(() => {});
+          roleCache.delete(role.id);
+        }
       }
-      await punish(role.guild, executor.id, `Unauthorized role deletion (@${role.name})`);
+      // Deduped punish
+      const punishedSet = getPunishedSet(role.guild.id);
+      if (!punishedSet.has(executor.id)) {
+        punishedSet.add(executor.id);
+        await punish(role.guild, executor.id, `Unauthorized role deletion (@${role.name})`);
+      }
       await alertGuild(role.guild, "antinuke_triggered", { action: "role deletion", executor: executor.tag, detail: `Deleted role @${role.name} — restored and offender punished.` });
+      setTimeout(() => restoreSet.delete(role.id), 30000);
       return;
     }
 
@@ -471,11 +507,21 @@ function setup(client) {
       if (data.autoRestore.enabled && data.autoRestore.restoreRoles) {
         const tracker = getTracker(role.guild.id, "roleDelete");
         for (const action of tracker.filter((a) => a.executorId === executor.id)) {
+          if (restoreSet.has(action.targetId)) continue; // skip already-restored
+          restoreSet.add(action.targetId);
           const cached = roleCache.get(action.targetId);
-          if (cached) { await restoreRole(role.guild, cached); roleCache.delete(action.targetId); }
+          if (cached) {
+            await restoreRole(role.guild, cached).catch(() => {});
+            roleCache.delete(action.targetId);
+          }
+          setTimeout(() => restoreSet.delete(action.targetId), 30000);
         }
       }
-      await punish(role.guild, executor.id, `Mass role deletion (${count})`);
+      const punishedSet = getPunishedSet(role.guild.id);
+      if (!punishedSet.has(executor.id)) {
+        punishedSet.add(executor.id);
+        await punish(role.guild, executor.id, `Mass role deletion (${count})`);
+      }
       await alertGuild(role.guild, "antinuke_triggered", { action: `mass role deletion (${count})`, executor: executor.tag });
       actionTracker.get(role.guild.id).set("roleDelete", []);
     }
