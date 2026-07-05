@@ -70,8 +70,8 @@ async function runInit(ctx, guild, user) {
   const embed = buildFromConfig(
     {
       title: "L Initialized",
-      description: "All protections active.\nAntinuke • Auto-Restore • Bot Anti-Add • Anti-Raid • Anti-Spam • Anti-Webhook • Anti-Ping • Identity Lock",
-      color: "57F287",
+      description: "**Status:** Online\n**Mode:** Strict\nAll protections active.\nAntinuke • Auto-Restore • Bot Anti-Add • Anti-Raid • Anti-Spam • Anti-Webhook • Anti-Ping • Identity Lock • Role Guard • Emoji Guard",
+      color: "2B2D31",
       footer: "L",
       showTimestamp: false,
     },

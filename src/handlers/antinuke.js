@@ -580,6 +580,101 @@ function setup(client) {
     }
   });
 
+  // ====== ROLE CREATE (block unauthorized role creation) ======
+  client.on("roleCreate", async (role) => {
+    const data = getGuild(role.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    const executor = await fetchExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
+    if (!executor || isWhitelisted(role.guild, executor)) return;
+
+    recordAction(role.guild.id, "roleCreate", executor.id, role.id);
+    // Strict: delete the unauthorized role immediately + punish
+    try { await role.delete("[L Antinuke] Unauthorized role creation").catch(() => {}); } catch {}
+    const punishedSet = getPunishedSet(role.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      punishedSet.add(executor.id);
+      await punish(role.guild, executor.id, `Unauthorized role creation (@${role.name})`);
+      setTimeout(() => punishedSet.delete(executor.id), 15000);
+    }
+    await alertGuild(role.guild, "antinuke_blocked", { action: "role creation", executor: executor.tag });
+  });
+
+  // ====== ROLE UPDATE (block dangerous permission gain) ======
+  // Ported from Melon: only triggers when a role GAINS dangerous permissions
+  // (Admin, Ban, Kick, ManageGuild, ManageChannels, ManageRoles, ManageWebhooks,
+  // MentionEveryone). Prevents privilege escalation via role edits.
+  client.on("roleUpdate", async (oldRole, newRole) => {
+    const data = getGuild(newRole.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    cacheRole(newRole); // keep cache fresh on legitimate updates
+
+    const DANGEROUS = [
+      PermissionFlagsBits.Administrator, PermissionFlagsBits.BanMembers,
+      PermissionFlagsBits.KickMembers, PermissionFlagsBits.ManageGuild,
+      PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles,
+      PermissionFlagsBits.ManageWebhooks, PermissionFlagsBits.MentionEveryone,
+    ];
+    // Did the role GAIN any dangerous permission it didn't have before?
+    const gainedDangerous = DANGEROUS.some((p) =>
+      !oldRole.permissions.has(p) && newRole.permissions.has(p)
+    );
+    if (!gainedDangerous) return;
+
+    const executor = await fetchExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
+    if (!executor || isWhitelisted(newRole.guild, executor)) return;
+
+    // Revert the role permissions to the old state + punish
+    try {
+      await newRole.setPermissions(oldRole.permissions, "[L Antinuke] Reverted dangerous permission gain");
+    } catch {}
+    const punishedSet = getPunishedSet(newRole.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      punishedSet.add(executor.id);
+      await punish(newRole.guild, executor.id, `Dangerous permission gain on role @${newRole.name}`);
+      setTimeout(() => punishedSet.delete(executor.id), 15000);
+    }
+    await alertGuild(newRole.guild, "antinuke_triggered", {
+      action: "dangerous permission gain", executor: executor.tag,
+      detail: `Role @${newRole.name} gained dangerous permissions — reverted and offender punished.`,
+    });
+  });
+
+  // ====== EMOJI PROTECTION (block unauthorized emoji create/delete/update) ======
+  const handleEmoji = async (emoji, auditEvent, actionLabel) => {
+    const data = getGuild(emoji.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    const executor = await fetchExecutor(emoji.guild, auditEvent, emoji.id);
+    if (!executor || isWhitelisted(emoji.guild, executor)) return;
+    // Punish the unauthorized emoji action
+    const punishedSet = getPunishedSet(emoji.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      punishedSet.add(executor.id);
+      await punish(emoji.guild, executor.id, `Unauthorized emoji ${actionLabel} (${emoji.name})`);
+      setTimeout(() => punishedSet.delete(executor.id), 15000);
+    }
+    await alertGuild(emoji.guild, "antinuke_blocked", { action: `emoji ${actionLabel}`, executor: executor.tag });
+  };
+  client.on("emojiCreate", (emoji) => handleEmoji(emoji, AuditLogEvent.EmojiCreate, "creation"));
+  client.on("emojiDelete", (emoji) => handleEmoji(emoji, AuditLogEvent.EmojiDelete, "deletion"));
+  client.on("emojiUpdate", (oldEmoji, newEmoji) => handleEmoji(newEmoji, AuditLogEvent.EmojiUpdate, "update"));
+
+  // ====== STICKER PROTECTION (block unauthorized sticker create/delete) ======
+  const handleSticker = async (sticker, auditEvent, actionLabel) => {
+    const data = getGuild(sticker.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    const executor = await fetchExecutor(sticker.guild, auditEvent, sticker.id);
+    if (!executor || isWhitelisted(sticker.guild, executor)) return;
+    const punishedSet = getPunishedSet(sticker.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      punishedSet.add(executor.id);
+      await punish(sticker.guild, executor.id, `Unauthorized sticker ${actionLabel} (${sticker.name})`);
+      setTimeout(() => punishedSet.delete(executor.id), 15000);
+    }
+    await alertGuild(sticker.guild, "antinuke_blocked", { action: `sticker ${actionLabel}`, executor: executor.tag });
+  };
+  client.on("stickerCreate", (sticker) => handleSticker(sticker, AuditLogEvent.GuildStickerCreate, "creation"));
+  client.on("stickerDelete", (sticker) => handleSticker(sticker, AuditLogEvent.GuildStickerDelete, "deletion"));
+
   // ====== MASS UNBAN ======
   client.on("guildBanRemove", async (ban) => {
     const data = getGuild(ban.guild.id);
