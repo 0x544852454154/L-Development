@@ -5,9 +5,6 @@ const { buildFromConfig, sendEmbed } = require("../../embedBuilder");
 const { resolveEmojis } = require("../../emojiUtils");
 
 // The L-color emoji banner — resolved against the guild's custom emojis.
-// Requires these emojis to be in the server: :lblue: :lwhite: :lred: :lgreen: :lorange: :lpink:
-// If an emoji isn't found, the literal :name: token is shown so the user knows
-// to upload it.
 const L_BANNER = ":lblue: :lwhite: :lred: :lgreen: :lorange: :lpink:";
 
 function banner(guild) {
@@ -34,14 +31,14 @@ module.exports = {
     if (cat) {
       const category = config.categories.find((c) => c.name === cat);
       if (!category) return sendEmbed(interaction, "error", interaction.guild, { detail: "Category not found." });
-      const lines = category.commands.map((cmd) => `\`${data.prefix}${cmd}\``);
+      // Per-category: compact list, one line of commands
       const embed = buildFromConfig(
         {
           authorName: banner(interaction.guild),
           title: category.name,
-          description: `${category.blurb}\n\n**Commands (${category.commands.length}):**\n${lines.join("\n")}`,
+          description: category.commands.map((c) => `\`${c}\``).join("  "),
           color: "2B2D31",
-          footer: "L • Help Menu",
+          footer: `L • ${category.commands.length} commands`,
           showTimestamp: false,
         },
         interaction.guild
@@ -49,23 +46,22 @@ module.exports = {
       return interaction.reply({ embeds: [embed] });
     }
 
-    // Full menu
-    const fields = config.categories.map((c) => ({
-      name: `${c.name} (${c.commands.length})`,
-      value: c.blurb,
-    }));
+    // Full menu — compact, each category on its own block (matches the screenshot style)
+    let body = "";
+    for (const c of config.categories) {
+      body += `**${c.name}**\n${c.commands.join(" ")}\n\n`;
+    }
     const embed = buildFromConfig(
       {
         authorName: banner(interaction.guild),
-        title: "L — Command Center",
-        description: `**${total} commands** across **${config.categories.length} categories**.\nUse \`/help <category>\` or \`${data.prefix}help <category>\` to browse a category.\n\nCustomize these embeds with \`/embed edit\`.`,
+        title: "All Commands",
+        description: body.trim(),
         color: "2B2D31",
-        footer: "L • The Antinuke Authority",
+        footer: `L • ${total} commands`,
         showTimestamp: false,
       },
       interaction.guild
     );
-    embed.addFields(fields.slice(0, 25));
     return interaction.reply({ embeds: [embed] });
   },
 
@@ -77,14 +73,13 @@ module.exports = {
     if (cat) {
       const category = config.categories.find((c) => c.name.toLowerCase() === cat.toLowerCase());
       if (!category) return sendEmbed(message, "error", message.guild, { detail: "Category not found." });
-      const lines = category.commands.map((cmd) => `\`${data.prefix}${cmd}\``);
       const embed = buildFromConfig(
         {
           authorName: banner(message.guild),
           title: category.name,
-          description: `${category.blurb}\n\n**Commands (${category.commands.length}):**\n${lines.join("\n")}`,
+          description: category.commands.map((c) => `\`${c}\``).join("  "),
           color: "2B2D31",
-          footer: "L • Help Menu",
+          footer: `L • ${category.commands.length} commands`,
           showTimestamp: false,
         },
         message.guild
@@ -92,22 +87,21 @@ module.exports = {
       return message.reply({ embeds: [embed] });
     }
 
-    const fields = config.categories.map((c) => ({
-      name: `${c.name} (${c.commands.length})`,
-      value: c.blurb,
-    }));
+    let body = "";
+    for (const c of config.categories) {
+      body += `**${c.name}**\n${c.commands.join(" ")}\n\n`;
+    }
     const embed = buildFromConfig(
       {
         authorName: banner(message.guild),
-        title: "L — Command Center",
-        description: `**${total} commands** across **${config.categories.length} categories**.\nUse \`${data.prefix}help <category>\` to browse a category.\n\nCustomize embeds with \`${data.prefix}embed edit\`.`,
+        title: "All Commands",
+        description: body.trim(),
         color: "2B2D31",
-        footer: "L • The Antinuke Authority",
+        footer: `L • ${total} commands`,
         showTimestamp: false,
       },
       message.guild
     );
-    embed.addFields(fields.slice(0, 25));
     return message.reply({ embeds: [embed] });
   },
 };

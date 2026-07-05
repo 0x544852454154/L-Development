@@ -70,22 +70,10 @@ async function runInit(ctx, guild, user) {
   const embed = buildFromConfig(
     {
       title: "L Initialized",
-      description:
-        `The **L** antinuke shield is now **online** with all protections armed.\n\n` +
-        `**Antinuke:** Enabled (strict mode, punishment: ${config.antinuke.punishment})\n` +
-        `**Auto-Restore:** Enabled (channels, roles, bans, webhooks)\n` +
-        `**Bot Anti-Add:** Enabled\n` +
-        `**Anti-Raid:** Enabled\n` +
-        `**Anti-Spam:** Enabled\n` +
-        `**Anti-Webhook:** Enabled\n` +
-        `**Anti-Ping:** Enabled\n` +
-        `**Server Identity Lock:** Enabled\n` +
-        `  - Name, icon, and description are now protected\n` +
-        `  - Any unauthorized change = instant revert + ban\n\n` +
-        `Use \`/whitelist add\` to exempt trusted users/roles.`,
+      description: "All protections active.\nAntinuke • Auto-Restore • Bot Anti-Add • Anti-Raid • Anti-Spam • Anti-Webhook • Anti-Ping • Identity Lock",
       color: "57F287",
-      footer: "L • Antinuke System",
-      showTimestamp: true,
+      footer: "L",
+      showTimestamp: false,
     },
     guild
   );

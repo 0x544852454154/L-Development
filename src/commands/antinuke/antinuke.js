@@ -88,22 +88,11 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
     });
     addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield + ALL protections armed", "warning");
     const embed = buildFromConfig({
-      title: "Antinuke Shield Activated",
-      description:
-        "The L antinuke shield is now **online** with **all protections armed**.\n\n" +
-        "**Strict Mode:** ON — any unauthorized deletion = instant ban + restore\n" +
-        "**Anti-Ping:** ON — blocks @everyone/@here from non-whitelisted\n" +
-        "**Nuke Hooks:** ON — detects webhook spam\n" +
-        "**Anti-Webhook:** ON — blocks unauthorized webhook create + use\n" +
-        "**Anti-Spam:** ON — rate-limits message spam\n" +
-        "**Bot Anti-Add:** ON — auto-kicks unauthorized bots\n" +
-        "**Anti-Raid:** ON — detects join bursts, engages panic mode\n" +
-        "**Channel Rename:** blocked (strict)\n" +
-        "**Server Rename:** blocked (strict)\n\n" +
-        "Use `/whitelist` to exempt trusted users/roles.",
+      title: "Antinuke Enabled",
+      description: "All protections are now active.\nStrict • Anti-Ping • Anti-Webhook • Anti-Spam • Bot Anti-Add • Anti-Raid • Identity Lock",
       color: "57F287",
-      footer: "L • Antinuke System",
-      showTimestamp: true,
+      footer: "L",
+      showTimestamp: false,
     }, guild);
     return ctx.reply({ embeds: [embed] });
   }
@@ -146,23 +135,16 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
     const cfg = {
       title: "Antinuke Status",
       description:
-        `**Shield:** ${a.enabled ? "ONLINE" : "OFFLINE"}\n` +
-        `**Strict Mode:** ${on(a.strict)} — instant punish on any unauthorized action\n` +
-        `**Punishment:** ${a.punishment}\n` +
-        `**Threshold:** ${a.threshold} / ${a.window / 1000}s (threshold mode only)\n\n` +
-        `**Protections:**\n` +
-        `Anti-Ping: ${on(a.antiping)}\n` +
-        `Nuke Hooks: ${on(a.nukehooks)}\n` +
-        `Anti-Webhook: ${on(a.antiWebhook)} (create + use blocked)\n` +
-        `Anti-Spam: ${on(a.antiSpam)} (threshold: ${a.spamThreshold || 7}/5s)\n` +
-        `Bot Anti-Add: ${on(a.blockBotAdd)} (${a.whitelistedBots.length} whitelisted)\n` +
-        `Anti-Raid: ${on(ar.enabled)} (${ar.panicMode ? "PANIC MODE" : "standby"})\n` +
-        `Identity Lock: ${on(id.locked)} (name/icon/description protected)\n\n` +
-        `**Whitelists:**\n` +
-        `Users: ${a.whitelistedUsers.length} | Roles: ${a.whitelistedRoles.length} | Extra Owners: ${a.extraOwners.length} | Bots: ${a.whitelistedBots.length}`,
+        `Shield: ${a.enabled ? "ONLINE" : "OFFLINE"}\n` +
+        `Strict: ${on(a.strict)} • Punishment: ${a.punishment}\n` +
+        `Anti-Ping: ${on(a.antiping)} • Anti-Webhook: ${on(a.antiWebhook)}\n` +
+        `Anti-Spam: ${on(a.antiSpam)} • Bot Anti-Add: ${on(a.blockBotAdd)}\n` +
+        `Anti-Raid: ${on(ar.enabled)}${ar.panicMode ? " (PANIC)" : ""}\n` +
+        `Identity Lock: ${on(id.locked)}\n\n` +
+        `Whitelists: ${a.whitelistedUsers.length} users • ${a.whitelistedRoles.length} roles • ${a.whitelistedBots.length} bots`,
       color: a.enabled ? "57F287" : "ED4245",
-      footer: "L • Antinuke System",
-      showTimestamp: true,
+      footer: "L",
+      showTimestamp: false,
     };
     const embed = buildFromConfig(cfg, guild);
     return ctx.reply({ embeds: [embed] });
