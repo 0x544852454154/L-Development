@@ -12,7 +12,7 @@ const DEFAULT_EMBEDS = {
   antinuke_enabled: {
     title: "Antinuke Shield Activated",
     titleEmoji: "🛡️",
-    description: "The **L** antinuke shield is now **online**.\nNukes will be detected and reverted automatically.",
+    description: "The **L** antinuke shield is now **online**.\nAll protections enabled: anti-ping, anti-webhook, bot spam detection, and auto-restore.",
     footer: "L • Antinuke System",
     footerEmoji: "👑",
     authorName: "L",
@@ -36,7 +36,7 @@ const DEFAULT_EMBEDS = {
   antinuke_disabled: {
     title: "Antinuke Shield Deactivated",
     titleEmoji: "⚠️",
-    description: "The antinuke shield is now **offline**.\nThis server is no longer protected from nukes.",
+    description: "The antinuke shield is now **offline**.\nAll protections disabled: anti-ping, anti-webhook, bot spam detection, and auto-restore.",
     footer: "L • Antinuke System",
     footerEmoji: "👑",
     color: "F1C40F",

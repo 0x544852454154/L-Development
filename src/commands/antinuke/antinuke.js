@@ -94,14 +94,24 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
   const data = getGuild(guild.id);
 
   if (action === "on") {
-    updateGuild(guild.id, (d) => { d.antinuke.enabled = true; });
-    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield turned on", "warning");
+    updateGuild(guild.id, (d) => { 
+      d.antinuke.enabled = true;
+      d.antinuke.antiping = true;
+      d.antinuke.nukehooks = true;
+      d.antinuke.botSpamDetection = true;
+    });
+    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield turned on with all protections", "warning");
     return sendEmbed(ctx, "antinuke_enabled", guild, {});
   }
 
   if (action === "off") {
-    updateGuild(guild.id, (d) => { d.antinuke.enabled = false; });
-    addAudit(guild.id, "Antinuke Disabled", user.tag, "Antinuke shield turned off", "danger");
+    updateGuild(guild.id, (d) => { 
+      d.antinuke.enabled = false;
+      d.antinuke.antiping = false;
+      d.antinuke.nukehooks = false;
+      d.antinuke.botSpamDetection = false;
+    });
+    addAudit(guild.id, "Antinuke Disabled", user.tag, "Antinuke shield turned off with all protections", "danger");
     return sendEmbed(ctx, "antinuke_disabled", guild, {});
   }
 

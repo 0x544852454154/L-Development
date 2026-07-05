@@ -28,6 +28,9 @@ function runInit(ctx, guild, user) {
     d.antinuke.threshold = config.antinuke.defaultThreshold;
     d.antinuke.window = config.antinuke.defaultWindow;
     d.antinuke.punishment = config.antinuke.punishment;
+    d.antinuke.antiping = true;
+    d.antinuke.nukehooks = true;
+    d.antinuke.botSpamDetection = true;
     d.autoRestore.enabled = true;
     d.autoRestore.restoreChannels = true;
     d.autoRestore.restoreRoles = true;
@@ -43,6 +46,9 @@ function runInit(ctx, guild, user) {
       description:
         `The **L** antinuke shield is now **online** with safe defaults.\n\n` +
         `**Antinuke:** ✅ Enabled (threshold: ${config.antinuke.defaultThreshold} actions / 10s, punishment: ${config.antinuke.punishment})\n` +
+        `**Anti-Ping:** ✅ Enabled\n` +
+        `**Anti-Webhook:** ✅ Enabled\n` +
+        `**Bot Spam Detection:** ✅ Enabled\n` +
         `**Auto-Restore:** ✅ Enabled (channels, roles, bans, webhooks)\n\n` +
         `Customize further with \`/antinuke\`, \`/whitelist\`, \`/automod\`, and \`/logging\`.`,
       color: "57F287",
