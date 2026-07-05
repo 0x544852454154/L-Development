@@ -1,7 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const { getGuild, updateGuild, addAudit } = require("../../database");
 const { sendEmbed, buildFromConfig, success, error } = require("../../embedBuilder");
-const config = require("../../config");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -69,13 +68,45 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
   const data = getGuild(guild.id);
 
   if (action === "on") {
-    updateGuild(guild.id, (d) => { d.antinuke.enabled = true; });
-    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield turned on", "warning");
-    return sendEmbed(ctx, "antinuke_enabled", guild, {});
+    // Enable ALL protections — the master switch arms everything
+    updateGuild(guild.id, (d) => {
+      d.antinuke.enabled = true;
+      d.antinuke.strict = true;
+      d.antinuke.antiping = true;
+      d.antinuke.nukehooks = true;
+      d.antinuke.antiWebhook = true;
+      d.antinuke.antiSpam = true;
+      d.antinuke.blockBotAdd = true;
+      d.antiRaid.enabled = true;
+    });
+    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield + ALL protections armed", "warning");
+    const embed = buildFromConfig({
+      title: "Antinuke Shield Activated",
+      description:
+        "The L antinuke shield is now **online** with **all protections armed**.\n\n" +
+        "**Strict Mode:** ON — any unauthorized deletion = instant ban + restore\n" +
+        "**Anti-Ping:** ON — blocks @everyone/@here from non-whitelisted\n" +
+        "**Nuke Hooks:** ON — detects webhook spam\n" +
+        "**Anti-Webhook:** ON — blocks unauthorized webhook create + use\n" +
+        "**Anti-Spam:** ON — rate-limits message spam\n" +
+        "**Bot Anti-Add:** ON — auto-kicks unauthorized bots\n" +
+        "**Anti-Raid:** ON — detects join bursts, engages panic mode\n" +
+        "**Channel Rename:** blocked (strict)\n" +
+        "**Server Rename:** blocked (strict)\n\n" +
+        "Use `/whitelist` to exempt trusted users/roles.",
+      color: "57F287",
+      footer: "L • Antinuke System",
+      showTimestamp: true,
+    }, guild);
+    return ctx.reply({ embeds: [embed] });
   }
 
   if (action === "off") {
-    updateGuild(guild.id, (d) => { d.antinuke.enabled = false; });
+    updateGuild(guild.id, (d) => {
+      d.antinuke.enabled = false;
+      d.antiRaid.panicMode = false;
+      d.antiRaid.panicUntil = 0;
+    });
     addAudit(guild.id, "Antinuke Disabled", user.tag, "Antinuke shield turned off", "danger");
     return sendEmbed(ctx, "antinuke_disabled", guild, {});
   }
@@ -102,21 +133,26 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
 
   if (action === "status") {
     const a = data.antinuke;
+    const ar = data.antiRaid;
+    const on = (v) => v ? "ON" : "OFF";
     const cfg = {
       title: "Antinuke Status",
-      titleEmoji: "🛡️",
       description:
-        `**Shield:** ${a.enabled ? "🟢 ONLINE" : "🔴 OFFLINE"}\n` +
-        `**Threshold:** ${a.threshold} actions / ${a.window / 1000}s\n` +
+        `**Shield:** ${a.enabled ? "ONLINE" : "OFFLINE"}\n` +
+        `**Strict Mode:** ${on(a.strict)} — instant punish on any unauthorized action\n` +
         `**Punishment:** ${a.punishment}\n` +
-        `**Anti-Ping:** ${a.antiping ? "ON" : "OFF"}\n` +
-        `**Nuke Hooks:** ${a.nukehooks ? "ON" : "OFF"}\n` +
-        `**Whitelisted Users:** ${a.whitelistedUsers.length}\n` +
-        `**Whitelisted Roles:** ${a.whitelistedRoles.length}\n` +
-        `**Extra Owners:** ${a.extraOwners.length}`,
+        `**Threshold:** ${a.threshold} / ${a.window / 1000}s (threshold mode only)\n\n` +
+        `**Protections:**\n` +
+        `Anti-Ping: ${on(a.antiping)}\n` +
+        `Nuke Hooks: ${on(a.nukehooks)}\n` +
+        `Anti-Webhook: ${on(a.antiWebhook)} (create + use blocked)\n` +
+        `Anti-Spam: ${on(a.antiSpam)} (threshold: ${a.spamThreshold || 7}/5s)\n` +
+        `Bot Anti-Add: ${on(a.blockBotAdd)} (${a.whitelistedBots.length} whitelisted)\n` +
+        `Anti-Raid: ${on(ar.enabled)} (${ar.panicMode ? "PANIC MODE" : "standby"})\n\n` +
+        `**Whitelists:**\n` +
+        `Users: ${a.whitelistedUsers.length} | Roles: ${a.whitelistedRoles.length} | Extra Owners: ${a.extraOwners.length} | Bots: ${a.whitelistedBots.length}`,
       color: a.enabled ? "57F287" : "ED4245",
       footer: "L • Antinuke System",
-      footerEmoji: "👑",
       showTimestamp: true,
     };
     const embed = buildFromConfig(cfg, guild);

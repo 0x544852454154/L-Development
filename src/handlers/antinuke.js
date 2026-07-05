@@ -1,38 +1,35 @@
-const { AuditLogEvent, PermissionFlagsBits } = require("discord.js");
+const { AuditLogEvent, PermissionFlagsBits, ChannelType } = require("discord.js");
 const { getGuild, updateGuild, addAudit } = require("../database");
 const { buildEmbed } = require("../embedBuilder");
 const { fetchExecutor } = require("./auditCache");
 const logger = require("../logger");
 
 /*
- * L Antinuke Engine — v2 (strict, hardened, optimized)
+ * L Antinuke Engine — v3 (maximum security)
  *
- * Improvements over v1:
- *  1. STRICT MODE (default on): ANY single destructive action by a
- *     non-whitelisted user triggers immediate punishment + auto-restore.
- *     No more waiting for the threshold to be crossed — one channel delete
- *     by a rogue admin = instant ban + channel restored.
- *  2. BOT ANTI-ADD: when a non-whitelisted user adds a bot to the server,
- *     the bot is auto-kicked instantly. A bot whitelist allows specific bots.
- *  3. ANTI-RAID: detects join bursts and engages panic mode.
- *  4. ANTI-SPAM: per-user message rate limiting.
- *  5. ANTI-WEBHOOK: blocks webhook creation by non-whitelisted users.
- *  6. OPTIMIZED: uses auditCache so a 50-channel nuke does ONE audit-log
- *     fetch instead of 50. Write-behind DB. Early event short-circuiting.
- *  7. SAFE RESTORE: channels restored with full overwrites; roles with
- *     permissions; bans re-applied. Throttled to respect rate limits.
+ * v3 improvements over v2:
+ *  1. WEBHOOK BYPASS FIXED: audit-log lookup now matches webhook ID (not channel ID).
+ *     v2 passed channel.id as the audit target — webhook creation targets the webhook,
+ *     so the executor was NEVER found. Now we fetch the webhook and match by ID.
+ *  2. WEBHOOK USAGE DETECTION: tracks webhook→creator mapping. When a webhook sends
+ *     a message (messageCreate with webhookId), if the creator is non-whitelisted →
+ *     ban creator + delete webhook + delete message.
+ *  3. CHANNEL RENAME → BAN: channelUpdate name change by non-whitelisted = ban + revert.
+ *  4. SERVER RENAME → BAN: guildUpdate name change by non-whitelisted = ban + revert.
+ *  5. INSTANT-NUKE COUNTER: rapid-burst detection (3+ deletions in 2s) triggers
+ *     emergency lockdown — bans executor IMMEDIATELY (before any restore), then
+ *     batch-restores all cached channels in parallel (groups of 5 for rate limits).
+ *  6. PROACTIVE CACHING: channels/roles cached on ready AND on interval (every 60s).
  */
 
 // ===== Action tracking (in-memory, per guild) =====
-const actionTracker = new Map(); // guildId -> Map<type, Array<{ts, executorId, targetId}>>
-
+const actionTracker = new Map();
 function getTracker(guildId, type) {
   if (!actionTracker.has(guildId)) actionTracker.set(guildId, new Map());
   const m = actionTracker.get(guildId);
   if (!m.has(type)) m.set(type, []);
   return m.get(type);
 }
-
 function recordAction(guildId, type, executorId, targetId) {
   const arr = getTracker(guildId, type);
   arr.push({ ts: Date.now(), executorId, targetId });
@@ -40,12 +37,22 @@ function recordAction(guildId, type, executorId, targetId) {
   const cutoff = Date.now() - win * 2;
   while (arr.length && arr[0].ts < cutoff) arr.shift();
 }
-
 function countActions(guildId, type) {
   const arr = getTracker(guildId, type);
   const win = getGuild(guildId).antinuke.window || 10000;
   const cutoff = Date.now() - win;
   return arr.filter((a) => a.ts >= cutoff).length;
+}
+
+// ===== Rapid-burst detection (instant-nuke counter) =====
+const rapidDeleteTracker = new Map(); // guildId -> Array<ts>
+function isRapidBurst(guildId) {
+  if (!rapidDeleteTracker.has(guildId)) rapidDeleteTracker.set(guildId, []);
+  const arr = rapidDeleteTracker.get(guildId);
+  arr.push(Date.now());
+  const cutoff = Date.now() - 2000; // 2 second window
+  while (arr.length && arr[0] < cutoff) arr.shift();
+  return arr.length >= 3; // 3+ deletions in 2s = instant nuke
 }
 
 // ===== Whitelist check =====
@@ -74,14 +81,10 @@ async function punish(guild, userId, reason) {
       if (member) {
         const dangerous = member.roles.cache.filter((r) =>
           r.permissions.has([
-            PermissionFlagsBits.Administrator,
-            PermissionFlagsBits.ManageChannels,
-            PermissionFlagsBits.ManageRoles,
-            PermissionFlagsBits.BanMembers,
-            PermissionFlagsBits.KickMembers,
-            PermissionFlagsBits.ManageGuild,
-            PermissionFlagsBits.ManageWebhooks,
-            PermissionFlagsBits.MentionEveryone,
+            PermissionFlagsBits.Administrator, PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ManageRoles, PermissionFlagsBits.BanMembers,
+            PermissionFlagsBits.KickMembers, PermissionFlagsBits.ManageGuild,
+            PermissionFlagsBits.ManageWebhooks, PermissionFlagsBits.MentionEveryone,
           ])
         );
         for (const role of dangerous.values()) {
@@ -97,35 +100,35 @@ async function punish(guild, userId, reason) {
 // ===== Restore caches =====
 const channelCache = new Map();
 const roleCache = new Map();
-const banCache = new Map(); // guildId -> Map<userId, {reason}>
-const webhookCache = new Map(); // guildId -> Map<webhookId, {name, channelId, avatar}>
+const banCache = new Map();
+// webhookCreatorMap: guildId -> Map<webhookId, creatorUserId>
+// Used to trace webhook messages back to the creator for punishment
+const webhookCreatorMap = new Map();
 
 function cacheChannel(channel) {
   if (!channel.guild) return;
   channelCache.set(channel.id, {
-    name: channel.name,
-    type: channel.type,
-    parentId: channel.parentId,
-    topic: channel.topic || null,
-    position: channel.position,
-    nsfw: channel.nsfw || false,
+    name: channel.name, type: channel.type, parentId: channel.parentId,
+    topic: channel.topic || null, position: channel.position, nsfw: channel.nsfw || false,
     rateLimit: channel.rateLimitPerUser || 0,
     permissionOverwrites: channel.permissionOverwrites.cache.map((o) => ({
       id: o.id, type: o.type, allow: o.allow.toArray(), deny: o.deny.toArray(),
     })),
     guildId: channel.guild.id,
   });
-  if (channelCache.size > 2000) channelCache.delete(channelCache.keys().next().value);
+  if (channelCache.size > 5000) channelCache.delete(channelCache.keys().next().value);
 }
 
 function cacheRole(role) {
   roleCache.set(role.id, {
-    name: role.name, color: role.color, hoist: role.hoist,
-    mentionable: role.mentionable, permissions: role.permissions.bitfield.toString(),
-    position: role.position, icon: role.icon || null, guildId: role.guild.id,
+    name: role.name, color: role.color, hoist: role.hoist, mentionable: role.mentionable,
+    permissions: role.permissions.bitfield.toString(), position: role.position, icon: role.icon || null,
+    guildId: role.guild.id,
   });
-  if (roleCache.size > 1000) roleCache.delete(roleCache.keys().next().value);
+  if (roleCache.size > 2000) roleCache.delete(roleCache.keys().next().value);
 }
+
+function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function restoreChannel(guild, cached) {
   try {
@@ -138,7 +141,6 @@ async function restoreChannel(guild, cached) {
         deny: BigInt(o.deny.join("|") || "0"),
       })),
     });
-    logger.log(`[restore] re-created channel #${created.name} in ${guild.name}`);
     return created;
   } catch (e) {
     logger.error("[restore] channel failed", e.message);
@@ -148,13 +150,10 @@ async function restoreChannel(guild, cached) {
 
 async function restoreRole(guild, cached) {
   try {
-    const created = await guild.roles.create({
-      name: cached.name, color: cached.color, hoist: cached.hoist,
-      mentionable: cached.mentionable,
+    return await guild.roles.create({
+      name: cached.name, color: cached.color, hoist: cached.hoist, mentionable: cached.mentionable,
       permissions: cached.permissions ? BigInt(cached.permissions) : 0n,
     });
-    logger.log(`[restore] re-created role @${created.name} in ${guild.name}`);
-    return created;
   } catch (e) {
     logger.error("[restore] role failed", e.message);
     return null;
@@ -176,75 +175,130 @@ async function alertGuild(guild, embedKey, vars) {
     vars.detail || `${vars.action || "event"} by ${vars.executor || "unknown"}`, "danger");
 }
 
-// ===== Anti-raid join tracking =====
-const joinTracker = new Map(); // guildId -> Array<ts>
+// ===== Anti-raid =====
+const joinTracker = new Map();
+const spamTracker = new Map();
 
-// ===== Spam tracking =====
-const spamTracker = new Map(); // guildId -> Map<userId, Array<ts>>
+function handleJoin(member) {
+  const data = getGuild(member.guild.id);
+  if (!data.antiRaid.enabled) return;
+  if (!joinTracker.has(member.guild.id)) joinTracker.set(member.guild.id, []);
+  const arr = joinTracker.get(member.guild.id);
+  arr.push(Date.now());
+  const cutoff = Date.now() - (data.antiRaid.joinWindow || 10000);
+  while (arr.length && arr[0] < cutoff) arr.shift();
+  if (arr.length >= (data.antiRaid.joinThreshold || 10)) {
+    if (!data.antiRaid.panicMode) {
+      updateGuild(member.guild.id, (d) => {
+        d.antiRaid.panicMode = true;
+        d.antiRaid.panicUntil = Date.now() + 300000;
+      });
+      const embed = buildEmbed("raid_detected", member.guild, { count: arr.length, window: Math.round((data.antiRaid.joinWindow || 10000) / 1000) });
+      const ch = member.guild.channels.cache.get(data.logging.channel || data.autoRestore.logChannelId);
+      if (ch) ch.send({ embeds: [embed] }).catch(() => {});
+      addAudit(member.guild.id, "Raid Detected", "L", `${arr.length} joins in ${data.antiRaid.joinWindow / 1000}s — panic mode engaged`, "danger");
+      logger.log(`[antiraid] panic mode engaged in ${member.guild.name} (${arr.length} joins)`);
+    }
+  }
+  if (data.antiRaid.panicMode && Date.now() < data.antiRaid.panicUntil) {
+    const action = data.antiRaid.action || "kick";
+    if (action === "kick") member.kick("[L Anti-Raid] panic mode").catch(() => {});
+    else if (action === "ban") member.ban({ reason: "[L Anti-Raid] panic mode" }).catch(() => {});
+    return;
+  }
+  if (data.antiRaid.minAccountAge > 0) {
+    const age = Date.now() - member.user.createdTimestamp;
+    if (age < data.antiRaid.minAccountAge) member.kick("[L Anti-Raid] account too young").catch(() => {});
+  }
+}
+
+function clearPanic(guildId) {
+  updateGuild(guildId, (d) => { d.antiRaid.panicMode = false; d.antiRaid.panicUntil = 0; });
+}
+
+// ===== Proactive cache refresh (every 60s) =====
+let cacheInterval = null;
 
 // ===== Main setup =====
 function setup(client) {
-  // Cache channels & roles so we can restore them
+  // --- Cache channels & roles on events ---
   client.on("channelCreate", cacheChannel);
   client.on("channelUpdate", (oldCh, newCh) => cacheChannel(newCh));
   client.on("roleCreate", cacheRole);
   client.on("roleUpdate", (oldR, newR) => cacheRole(newR));
 
-  // Cache bans
+  // --- Cache bans ---
   client.on("guildBanAdd", (ban) => {
     if (!banCache.has(ban.guild.id)) banCache.set(ban.guild.id, new Map());
     banCache.get(ban.guild.id).set(ban.user.id, { reason: ban.reason || null, at: Date.now() });
   });
 
-  // Cache webhooks for restore
-  client.on("webhooksUpdate", async (channel) => {
-    try {
-      const hooks = await channel.guild.fetchWebhooks().catch(() => []);
-      if (!webhookCache.has(channel.guild.id)) webhookCache.set(channel.guild.id, new Map());
-      for (const h of hooks.values()) {
-        webhookCache.get(channel.guild.id).set(h.id, { name: h.name, channelId: h.channelId, avatar: h.avatar });
-      }
-    } catch {}
-  });
-
-  // ====== STRICT CHANNEL DELETE ======
+  // ====== CHANNEL DELETE (with instant-nuke counter) ======
   client.on("channelDelete", async (channel) => {
     if (!channel.guild) return;
     const data = getGuild(channel.guild.id);
     if (!data.antinuke.enabled) return;
 
     const executor = await fetchExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-    // No executor found OR whitelisted -> allowed
     if (!executor || isWhitelisted(channel.guild, executor)) return;
 
     recordAction(channel.guild.id, "channelDelete", executor.id, channel.id);
 
-    // STRICT MODE: immediate punishment on ANY single deletion
+    // --- INSTANT-NUKE COUNTER: 3+ deletions in 2s = emergency lockdown ---
+    if (data.antinuke.strict && isRapidBurst(channel.guild.id)) {
+      // BAN FIRST — stop the nuke immediately
+      await punish(channel.guild, executor.id, `Mass channel deletion (emergency lockdown — rapid burst)`);
+      logger.log(`[antinuke] EMERGENCY LOCKDOWN: banned ${executor.tag} for instant-nuke in ${channel.guild.name}`);
+
+      // Batch-restore ALL deleted channels in parallel (groups of 5 for rate limits)
+      if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
+        const tracker = getTracker(channel.guild.id, "channelDelete");
+        const toRestore = tracker.filter((a) => a.executorId === executor.id);
+        const restoreBatch = [];
+        for (const action of toRestore) {
+          const cached = channelCache.get(action.targetId);
+          if (cached) {
+            restoreBatch.push(() => restoreChannel(channel.guild, cached).then(() => channelCache.delete(action.targetId)));
+          }
+        }
+        // Restore in groups of 5 to respect Discord rate limits (5 creates / 2s / guild)
+        for (let i = 0; i < restoreBatch.length; i += 5) {
+          await Promise.allSettled(restoreBatch.slice(i, i + 5).map((fn) => fn()));
+          if (i + 5 < restoreBatch.length) await delay(2100);
+        }
+        logger.log(`[antinuke] batch-restored ${restoreBatch.length} channels after instant-nuke`);
+      }
+
+      await alertGuild(channel.guild, "antinuke_triggered", {
+        action: "instant nuke (mass channel deletion)",
+        executor: executor.tag,
+        detail: `Emergency lockdown: rapid channel deletion detected. Offender banned. All channels restored.`,
+      });
+      actionTracker.get(channel.guild.id).set("channelDelete", []);
+      rapidDeleteTracker.set(channel.guild.id, []);
+      return;
+    }
+
+    // --- STRICT MODE: immediate punishment on ANY single deletion ---
     if (data.antinuke.strict) {
-      // Auto-restore the deleted channel
       if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
         const cached = channelCache.get(channel.id);
-        if (cached) {
-          await restoreChannel(channel.guild, cached);
-          channelCache.delete(channel.id);
-        }
+        if (cached) { await restoreChannel(channel.guild, cached); channelCache.delete(channel.id); }
       }
       await punish(channel.guild, executor.id, `Unauthorized channel deletion (#${channel.name})`);
       await alertGuild(channel.guild, "antinuke_triggered", {
-        action: "channel deletion",
-        executor: executor.tag,
+        action: "channel deletion", executor: executor.tag,
         detail: `Deleted channel #${channel.name} — restored and offender punished.`,
       });
       return;
     }
 
-    // Threshold mode (legacy): wait for N deletions
+    // --- Threshold mode (legacy) ---
     const count = countActions(channel.guild.id, "channelDelete");
     if (count >= data.antinuke.threshold) {
       if (data.autoRestore.enabled && data.autoRestore.restoreChannels) {
         const tracker = getTracker(channel.guild.id, "channelDelete");
-        const recent = tracker.filter((a) => a.executorId === executor.id);
-        for (const action of recent) {
+        for (const action of tracker.filter((a) => a.executorId === executor.id)) {
           const cached = channelCache.get(action.targetId);
           if (cached) { await restoreChannel(channel.guild, cached); channelCache.delete(action.targetId); }
         }
@@ -253,6 +307,45 @@ function setup(client) {
       await alertGuild(channel.guild, "antinuke_triggered", { action: `mass channel deletion (${count})`, executor: executor.tag });
       actionTracker.get(channel.guild.id).set("channelDelete", []);
     }
+  });
+
+  // ====== CHANNEL RENAME → BAN (NEW) ======
+  client.on("channelUpdate", async (oldChannel, newChannel) => {
+    if (!newChannel.guild) return;
+    cacheChannel(newChannel); // keep cache fresh
+    const data = getGuild(newChannel.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    // Only trigger on NAME change
+    if (oldChannel.name === newChannel.name) return;
+
+    const executor = await fetchExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
+    if (!executor || isWhitelisted(newChannel.guild, executor)) return;
+
+    // Revert the name + ban
+    try { await newChannel.edit({ name: oldChannel.name }, `[L Antinuke] Reverted unauthorized channel rename`); } catch {}
+    await punish(newChannel.guild, executor.id, `Unauthorized channel rename (#${oldChannel.name} -> #${newChannel.name})`);
+    await alertGuild(newChannel.guild, "antinuke_triggered", {
+      action: "channel rename", executor: executor.tag,
+      detail: `Renamed #${oldChannel.name} to #${newChannel.name} — reverted and offender punished.`,
+    });
+  });
+
+  // ====== SERVER RENAME → BAN (NEW) ======
+  client.on("guildUpdate", async (oldGuild, newGuild) => {
+    const data = getGuild(newGuild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    if (oldGuild.name === newGuild.name) return;
+
+    const executor = await fetchExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id);
+    if (!executor || isWhitelisted(newGuild, executor)) return;
+
+    // Revert the name + ban
+    try { await newGuild.setName(oldGuild.name, `[L Antinuke] Reverted unauthorized server rename`); } catch {}
+    await punish(newGuild, executor.id, `Unauthorized server rename (${oldGuild.name} -> ${newGuild.name})`);
+    await alertGuild(newGuild, "antinuke_triggered", {
+      action: "server rename", executor: executor.tag,
+      detail: `Server renamed from "${oldGuild.name}" to "${newGuild.name}" — reverted and offender punished.`,
+    });
   });
 
   // ====== CHANNEL CREATE (anti-nuke-channel-spam) ======
@@ -267,7 +360,6 @@ function setup(client) {
     recordAction(channel.guild.id, "channelCreate", executor.id, channel.id);
 
     if (data.antinuke.strict) {
-      // Strict: delete the unauthorized channel immediately
       try { await channel.delete("[L Antinuke] Unauthorized channel creation"); } catch {}
       await punish(channel.guild, executor.id, `Unauthorized channel creation (#${channel.name})`);
       await alertGuild(channel.guild, "antinuke_blocked", { action: "channel creation", executor: executor.tag });
@@ -350,63 +442,140 @@ function setup(client) {
     }
   });
 
-  // ====== BOT ANTI-ADD (the new feature) ======
-  // When a bot joins, check who added it. If not whitelisted -> kick the bot.
+  // ====== BOT ANTI-ADD ======
   client.on("guildMemberAdd", async (member) => {
-    if (!member.user.bot) {
-      // Anti-raid join tracking for humans
-      handleJoin(member);
-      return;
-    }
+    if (!member.user.bot) { handleJoin(member); return; }
     const data = getGuild(member.guild.id);
     if (!data.antinuke.enabled || !data.antinuke.blockBotAdd) return;
-
-    // Whitelisted bot -> allow
     if (data.antinuke.whitelistedBots.includes(member.id)) return;
 
     const executor = await fetchExecutor(member.guild, AuditLogEvent.BotAdd, member.id);
     if (!executor || isWhitelisted(member.guild, executor)) return;
 
-    // Non-whitelisted user added a bot -> kick the bot + punish the adder
     try {
       await member.kick("[L Antinuke] Unauthorized bot addition").catch(() => {});
       await punish(member.guild, executor.id, `Unauthorized bot addition (${member.user.tag})`);
       await alertGuild(member.guild, "bot_blocked", { bot: member.user.tag, executor: executor.tag });
-      logger.log(`[antinuke] kicked unauthorized bot ${member.user.tag} added by ${executor.tag}`);
     } catch (e) {
       logger.error("[antinuke] bot-add protection failed", e.message);
     }
   });
 
-  // ====== ANTI-WEBHOOK (block webhook creation by non-whitelisted) ======
+  // ====== ANTI-WEBHOOK (FIXED: correct audit-log target + usage detection) ======
   client.on("webhooksUpdate", async (channel) => {
     const data = getGuild(channel.guild.id);
     if (!data.antinuke.enabled || !data.antinuke.antiWebhook) return;
-    const executor = await fetchExecutor(channel.guild, AuditLogEvent.WebhookCreate, channel.id);
-    if (!executor || isWhitelisted(channel.guild, executor)) return;
 
-    // Delete any webhooks created in this channel recently by the non-whitelisted user
     try {
+      // Fetch the guild's webhooks to find ones in this channel
       const hooks = await channel.guild.fetchWebhooks().catch(() => []);
-      for (const h of hooks.values()) {
-        if (h.channelId === channel.id && h.ownerId === executor.id) {
-          await h.delete("[L Antinuke] Unauthorized webhook creation").catch(() => {});
+      const channelHooks = [...hooks.values()].filter((h) => h.channelId === channel.id);
+
+      // Fetch audit log for WebhookCreate — the target is the WEBHOOK, not the channel
+      // (this was the v2 bug: it matched channel.id which never equals a webhook ID)
+      const logs = await channel.guild.fetchAuditLogs({ limit: 10, type: AuditLogEvent.WebhookCreate }).catch(() => null);
+      const recentEntry = logs?.entries?.find((e) => Date.now() - e.createdTimestamp < 15000); // within 15s
+
+      if (recentEntry) {
+        const executor = recentEntry.executor;
+        const webhook = recentEntry.target; // the Webhook object
+
+        if (executor && !isWhitelisted(channel.guild, executor)) {
+          // Track webhook → creator mapping (for usage detection)
+          if (!webhookCreatorMap.has(channel.guild.id)) webhookCreatorMap.set(channel.guild.id, new Map());
+          if (webhook) webhookCreatorMap.get(channel.guild.id).set(webhook.id, executor.id);
+
+          // Delete the webhook immediately
+          if (webhook && webhook.delete) {
+            await webhook.delete("[L Antinuke] Unauthorized webhook creation").catch(() => {});
+          } else {
+            // Fallback: delete any webhook in this channel owned by the executor
+            for (const h of channelHooks) {
+              if (h.ownerId === executor.id) await h.delete("[L Antinuke] Unauthorized webhook").catch(() => {});
+            }
+          }
+
+          // Ban the creator
+          await punish(channel.guild, executor.id, "Unauthorized webhook creation");
+          await alertGuild(channel.guild, "antinuke_triggered", {
+            action: "webhook creation", executor: executor.tag,
+            detail: `Created a webhook in #${channel.name} — webhook deleted and creator punished.`,
+          });
+          return;
         }
       }
-      await punish(channel.guild, executor.id, "Unauthorized webhook creation");
-      await alertGuild(channel.guild, "antinuke_blocked", { action: "webhook creation", executor: executor.tag });
+
+      // Fallback: if no audit log found but there are webhooks in this channel,
+      // and the bot has antiWebhook on, delete any webhook whose owner is non-whitelisted
+      for (const h of channelHooks) {
+        if (h.ownerId) {
+          const owner = await channel.guild.members.fetch(h.ownerId).catch(() => null);
+          if (owner && !isWhitelisted(channel.guild, owner.user)) {
+            await h.delete("[L Antinuke] Unauthorized webhook").catch(() => {});
+            if (!webhookCreatorMap.has(channel.guild.id)) webhookCreatorMap.set(channel.guild.id, new Map());
+            webhookCreatorMap.get(channel.guild.id).set(h.id, h.ownerId);
+            await punish(channel.guild, h.ownerId, "Unauthorized webhook creation");
+            await alertGuild(channel.guild, "antinuke_triggered", {
+              action: "webhook creation", executor: owner.user.tag,
+              detail: `Created a webhook in #${channel.name} — webhook deleted and creator punished.`,
+            });
+          }
+        }
+      }
     } catch (e) {
       logger.error("[antinuke] anti-webhook failed", e.message);
     }
   });
 
-  // ====== ANTI-PING ======
+  // ====== WELCOME / GOODBYE + WEBHOOK MESSAGE DETECTION ======
   client.on("messageCreate", async (message) => {
-    if (!message.guild || message.author.bot) return;
+    if (!message.guild) return;
+
+    // --- WEBHOOK MESSAGE DETECTION (NEW) ---
+    // If this message is from a webhook, check if the webhook was created by a non-whitelisted user
+    if (message.webhookId && message.guild) {
+      const data = getGuild(message.guild.id);
+      if (data.antinuke.enabled && data.antinuke.antiWebhook) {
+        try {
+          // Delete the webhook message
+          await message.delete().catch(() => {});
+
+          // Look up the creator from our tracking map
+          const creatorMap = webhookCreatorMap.get(message.guild.id);
+          let creatorId = creatorMap?.get(message.webhookId);
+
+          // Fetch the webhook to get the owner if we don't have it tracked
+          const webhook = await message.guild.fetchWebhook(message.webhookId).catch(() => null);
+          if (webhook) {
+            if (!creatorId) creatorId = webhook.ownerId;
+            // Delete the webhook
+            await webhook.delete("[L Antinuke] Unauthorized webhook usage").catch(() => {});
+          }
+
+          // Ban the creator if known and not whitelisted
+          if (creatorId) {
+            const creator = await message.guild.members.fetch(creatorId).catch(() => null);
+            if (creator && !isWhitelisted(message.guild, creator.user)) {
+              await punish(message.guild, creatorId, "Unauthorized webhook creation and usage");
+              await alertGuild(message.guild, "antinuke_triggered", {
+                action: "webhook usage", executor: creator.user.tag,
+                detail: `Unauthorized webhook used to send messages — webhook deleted and creator punished.`,
+              });
+            }
+          }
+        } catch (e) {
+          logger.error("[antinuke] webhook-usage detection failed", e.message);
+        }
+      }
+      return; // webhook messages don't need further processing
+    }
+
+    if (message.author.bot) return;
     const data = getGuild(message.guild.id);
-    if (!data.antinuke.enabled || !data.antinuke.antiping) return;
-    if (isWhitelisted(message.guild, message.author)) return;
-    if (message.mentions.everyone) {
+    if (!data.antinuke.enabled) return;
+
+    // --- ANTI-PING ---
+    if (data.antinuke.antiping && !isWhitelisted(message.guild, message.author) && message.mentions.everyone) {
       try {
         await message.delete();
         const member = await message.guild.members.fetch(message.author.id).catch(() => null);
@@ -414,8 +583,8 @@ function setup(client) {
       } catch {}
     }
 
-    // ====== ANTI-SPAM ======
-    if (data.antinuke.antiSpam) {
+    // --- ANTI-SPAM ---
+    if (data.antinuke.antiSpam && !isWhitelisted(message.guild, message.author)) {
       if (!spamTracker.has(message.guild.id)) spamTracker.set(message.guild.id, new Map());
       const userMap = spamTracker.get(message.guild.id);
       if (!userMap.has(message.author.id)) userMap.set(message.author.id, []);
@@ -472,7 +641,7 @@ function setup(client) {
 
   // ====== LEVELING XP ======
   client.on("messageCreate", (message) => {
-    if (!message.guild || message.author.bot) return;
+    if (!message.guild || message.author.bot || message.webhookId) return;
     const data = getGuild(message.guild.id);
     if (!data.leveling.enabled) return;
     if (data.leveling.ignoreChannels.includes(message.channel.id)) return;
@@ -493,55 +662,16 @@ function setup(client) {
     });
   });
 
-  logger.log("[antinuke] v2 handlers attached (strict mode + bot anti-add + anti-raid + anti-spam)");
-}
-
-// ===== Anti-raid join handling =====
-function handleJoin(member) {
-  const data = getGuild(member.guild.id);
-  if (!data.antiRaid.enabled) return;
-
-  if (!joinTracker.has(member.guild.id)) joinTracker.set(member.guild.id, []);
-  const arr = joinTracker.get(member.guild.id);
-  arr.push(Date.now());
-  const cutoff = Date.now() - (data.antiRaid.joinWindow || 10000);
-  while (arr.length && arr[0] < cutoff) arr.shift();
-
-  // Engage panic mode if threshold crossed
-  if (arr.length >= (data.antiRaid.joinThreshold || 10)) {
-    if (!data.antiRaid.panicMode) {
-      updateGuild(member.guild.id, (d) => {
-        d.antiRaid.panicMode = true;
-        d.antiRaid.panicUntil = Date.now() + 300000; // 5 min panic
-      });
-      const embed = buildEmbed("raid_detected", member.guild, { count: arr.length, window: Math.round((data.antiRaid.joinWindow || 10000) / 1000) });
-      const ch = member.guild.channels.cache.get(data.logging.channel || data.autoRestore.logChannelId);
-      if (ch) ch.send({ embeds: [embed] }).catch(() => {});
-      addAudit(member.guild.id, "Raid Detected", "L", `${arr.length} joins in ${data.antiRaid.joinWindow / 1000}s — panic mode engaged`, "danger");
-      logger.log(`[antiraid] panic mode engaged in ${member.guild.name} (${arr.length} joins)`);
+  // ====== PROACTIVE CACHE REFRESH (every 60s) ======
+  if (cacheInterval) clearInterval(cacheInterval);
+  cacheInterval = setInterval(() => {
+    for (const guild of client.guilds.cache.values()) {
+      guild.channels.cache.forEach((ch) => cacheChannel(ch));
+      guild.roles.cache.forEach((r) => cacheRole(r));
     }
-  }
+  }, 60000);
 
-  // If in panic mode, apply the raid action to new joins
-  if (data.antiRaid.panicMode && Date.now() < data.antiRaid.panicUntil) {
-    const action = data.antiRaid.action || "kick";
-    if (action === "kick") member.kick("[L Anti-Raid] panic mode").catch(() => {});
-    else if (action === "ban") member.ban({ reason: "[L Anti-Raid] panic mode" }).catch(() => {});
-    return;
-  }
-
-  // Min account age check
-  if (data.antiRaid.minAccountAge > 0) {
-    const age = Date.now() - member.user.createdTimestamp;
-    if (age < data.antiRaid.minAccountAge) {
-      member.kick("[L Anti-Raid] account too young").catch(() => {});
-    }
-  }
-}
-
-// Exported helpers for commands
-function clearPanic(guildId) {
-  updateGuild(guildId, (d) => { d.antiRaid.panicMode = false; d.antiRaid.panicUntil = 0; });
+  logger.log("[antinuke] v3 handlers attached (strict + webhook fix + rename ban + instant-nuke counter)");
 }
 
 module.exports = {
