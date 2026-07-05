@@ -74,6 +74,11 @@ function getPunishedSet(guildId) {
 
 // ===== Whitelist check =====
 function isWhitelisted(guild, user) {
+  // The bot itself is always exempt — prevents self-trigger loops where the
+  // bot's own restore/revert operations (channelCreate, roleCreate, setName,
+  // setIcon, bans, etc.) would fire the antinuke handlers and try to punish
+  // the bot for doing its job.
+  if (user.id === guild.client?.user?.id) return true;
   const data = getGuild(guild.id);
   if (guild.ownerId === user.id) return true;
   if (data.antinuke.extraOwners.includes(user.id)) return true;
