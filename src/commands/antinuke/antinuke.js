@@ -15,7 +15,6 @@ module.exports = {
           { name: "threshold", value: "threshold" },
           { name: "punishment", value: "punishment" },
           { name: "status", value: "status" },
-          { name: "botspam", value: "botspam" },
         )
     )
     .addIntegerOption((o) =>
@@ -29,17 +28,6 @@ module.exports = {
           { name: "strip", value: "strip" },
         )
     )
-    .addStringOption((o) =>
-      o.setName("type").setDescription("Bot spam type to configure").setRequired(false)
-        .addChoices(
-          { name: "messages", value: "messages" },
-          { name: "channels", value: "channels" },
-          { name: "roles", value: "roles" },
-        )
-    )
-    .addIntegerOption((o) =>
-      o.setName("threshold").setDescription("Bot spam threshold (1-100)").setRequired(false).setMinValue(1).setMaxValue(100)
-    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   name: "antinuke",
   category: "Antinuke",
@@ -50,16 +38,14 @@ module.exports = {
     const action = interaction.options.getString("action");
     const value = interaction.options.getInteger("value");
     const punishment = interaction.options.getString("punishment");
-    const botSpamType = interaction.options.getString("type");
-    const botSpamThreshold = interaction.options.getInteger("threshold");
-    return runAntinuke(interaction, interaction.guild, interaction.user, action, { value, punishment, botSpamType, botSpamThreshold });
+    return runAntinuke(interaction, interaction.guild, interaction.user, action, { value, punishment });
   },
 
   async execute(message, args, client) {
     const data = getGuild(message.guild.id);
     const action = (args[0] || "").toLowerCase();
     if (!action) {
-      return error(message, message.guild, `Usage: \`${data.prefix}antinuke <on|off|threshold|punishment|status|botspam>\``);
+      return error(message, message.guild, `Usage: \`${data.prefix}antinuke <on|off|threshold|punishment|status>\``);
     }
     let opts = {};
     if (action === "threshold") {
@@ -74,17 +60,6 @@ module.exports = {
         return error(message, message.guild, "Punishment must be `ban`, `kick`, or `strip`.");
       }
       opts.punishment = p;
-    } else if (action === "botspam") {
-      const type = (args[1] || "").toLowerCase();
-      const threshold = parseInt(args[2], 10);
-      if (!["messages", "channels", "roles", "on", "off"].includes(type)) {
-        return error(message, message.guild, "Bot spam type must be `messages`, `channels`, `roles`, `on`, or `off`.");
-      }
-      if (type !== "on" && type !== "off" && (!Number.isFinite(threshold) || threshold < 1 || threshold > 100)) {
-        return error(message, message.guild, "Bot spam threshold must be a number between 1 and 100.");
-      }
-      opts.botSpamType = type;
-      opts.botSpamThreshold = threshold;
     }
     return runAntinuke(message, message.guild, message.author, action, opts);
   },
@@ -94,24 +69,14 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
   const data = getGuild(guild.id);
 
   if (action === "on") {
-    updateGuild(guild.id, (d) => { 
-      d.antinuke.enabled = true;
-      d.antinuke.antiping = true;
-      d.antinuke.nukehooks = true;
-      d.antinuke.botSpamDetection = true;
-    });
-    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield turned on with all protections", "warning");
+    updateGuild(guild.id, (d) => { d.antinuke.enabled = true; });
+    addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield turned on", "warning");
     return sendEmbed(ctx, "antinuke_enabled", guild, {});
   }
 
   if (action === "off") {
-    updateGuild(guild.id, (d) => { 
-      d.antinuke.enabled = false;
-      d.antinuke.antiping = false;
-      d.antinuke.nukehooks = false;
-      d.antinuke.botSpamDetection = false;
-    });
-    addAudit(guild.id, "Antinuke Disabled", user.tag, "Antinuke shield turned off with all protections", "danger");
+    updateGuild(guild.id, (d) => { d.antinuke.enabled = false; });
+    addAudit(guild.id, "Antinuke Disabled", user.tag, "Antinuke shield turned off", "danger");
     return sendEmbed(ctx, "antinuke_disabled", guild, {});
   }
 
@@ -146,10 +111,6 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
         `**Punishment:** ${a.punishment}\n` +
         `**Anti-Ping:** ${a.antiping ? "ON" : "OFF"}\n` +
         `**Nuke Hooks:** ${a.nukehooks ? "ON" : "OFF"}\n` +
-        `**Bot Spam Detection:** ${a.botSpamDetection ? "ON" : "OFF"}\n` +
-        `**Bot Message Threshold:** ${a.botSpamThreshold || 20} msgs/10s\n` +
-        `**Bot Channel Threshold:** ${a.botChannelSpamThreshold || 5} ch/10s\n` +
-        `**Bot Role Threshold:** ${a.botRoleSpamThreshold || 5} roles/10s\n` +
         `**Whitelisted Users:** ${a.whitelistedUsers.length}\n` +
         `**Whitelisted Roles:** ${a.whitelistedRoles.length}\n` +
         `**Extra Owners:** ${a.extraOwners.length}`,
@@ -162,51 +123,5 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
     return ctx.reply({ embeds: [embed] });
   }
 
-  if (action === "botspam") {
-    const type = opts.botSpamType;
-    const threshold = opts.botSpamThreshold;
-
-    if (type === "on") {
-      updateGuild(guild.id, (d) => { d.antinuke.botSpamDetection = true; });
-      addAudit(guild.id, "Bot Spam Detection Enabled", user.tag, "Bot spam detection turned on", "info");
-      return success(ctx, guild, "Bot spam detection is now **ENABLED**.");
-    }
-
-    if (type === "off") {
-      updateGuild(guild.id, (d) => { d.antinuke.botSpamDetection = false; });
-      addAudit(guild.id, "Bot Spam Detection Disabled", user.tag, "Bot spam detection turned off", "danger");
-      return success(ctx, guild, "Bot spam detection is now **DISABLED**.");
-    }
-
-    if (type === "messages") {
-      if (!threshold || threshold < 1 || threshold > 100) {
-        return error(ctx, guild, "Threshold must be a number between 1 and 100.");
-      }
-      updateGuild(guild.id, (d) => { d.antinuke.botSpamThreshold = threshold; });
-      addAudit(guild.id, "Bot Message Threshold Set", user.tag, `Bot message threshold set to ${threshold}`, "info");
-      return success(ctx, guild, `Bot message spam threshold set to **${threshold}** messages in 10 seconds.`);
-    }
-
-    if (type === "channels") {
-      if (!threshold || threshold < 1 || threshold > 100) {
-        return error(ctx, guild, "Threshold must be a number between 1 and 100.");
-      }
-      updateGuild(guild.id, (d) => { d.antinuke.botChannelSpamThreshold = threshold; });
-      addAudit(guild.id, "Bot Channel Threshold Set", user.tag, `Bot channel threshold set to ${threshold}`, "info");
-      return success(ctx, guild, `Bot channel spam threshold set to **${threshold}** channels in 10 seconds.`);
-    }
-
-    if (type === "roles") {
-      if (!threshold || threshold < 1 || threshold > 100) {
-        return error(ctx, guild, "Threshold must be a number between 1 and 100.");
-      }
-      updateGuild(guild.id, (d) => { d.antinuke.botRoleSpamThreshold = threshold; });
-      addAudit(guild.id, "Bot Role Threshold Set", user.tag, `Bot role threshold set to ${threshold}`, "info");
-      return success(ctx, guild, `Bot role spam threshold set to **${threshold}** roles in 10 seconds.`);
-    }
-
-    return error(ctx, guild, "Invalid bot spam type. Use `on`, `off`, `messages`, `channels`, or `roles`.");
-  }
-
-  return error(ctx, guild, "Unknown action. Use `on`, `off`, `threshold`, `punishment`, `status`, or `botspam`.");
+  return error(ctx, guild, "Unknown action. Use `on`, `off`, `threshold`, `punishment`, or `status`.");
 }

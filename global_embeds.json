@@ -1,0 +1,174 @@
+{
+  "antinuke_enabled": {
+    "title": "Antinuke Shield Activated",
+    "titleEmoji": "🛡️",
+    "description": "The **L** antinuke shield is now **online**.\nAll protections enabled: anti-ping, anti-webhook, bot spam detection, and auto-restore.",
+    "footer": "L • Antinuke System",
+    "footerEmoji": "👑",
+    "authorName": "L",
+    "authorEmoji": "👑",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "antinuke_triggered": {
+    "title": "Nuke Detected — Auto-Restore Engaged",
+    "titleEmoji": "💥",
+    "description": "A mass-destruction event was detected and **auto-reverted**.\nThe responsible account has been quarantined.",
+    "footer": "L • Threat Neutralized",
+    "footerEmoji": "♻️",
+    "authorName": "L",
+    "authorEmoji": "👑",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "antinuke_disabled": {
+    "title": "Antinuke Shield Deactivated",
+    "titleEmoji": "⚠️",
+    "description": "The antinuke shield is now **offline**.\nAll protections disabled: anti-ping, anti-webhook, bot spam detection, and auto-restore.",
+    "footer": "L • Antinuke System",
+    "footerEmoji": "👑",
+    "color": "F1C40F",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "help_menu": {
+    "title": "L — Command Center",
+    "titleEmoji": "👑",
+    "description": "Browse every category L protects your server with.\nUse the buttons or reactions below to navigate.",
+    "footer": "L • The Antinuke Authority",
+    "footerEmoji": "⚡",
+    "authorName": "L",
+    "authorEmoji": "👑",
+    "color": "2B2D31",
+    "showTimestamp": false,
+    "useServerEmojis": true
+  },
+  "ban_success": {
+    "title": "Member Banned",
+    "titleEmoji": "🔨",
+    "description": "**{user}** has been banned from the server.\n**Reason:** {reason}",
+    "footer": "L • Moderation",
+    "footerEmoji": "🛡️",
+    "authorName": "L",
+    "authorEmoji": "👑",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "kick_success": {
+    "title": "Member Kicked",
+    "titleEmoji": "👢",
+    "description": "**{user}** has been kicked.\n**Reason:** {reason}",
+    "footer": "L • Moderation",
+    "footerEmoji": "🛡️",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "timeout_success": {
+    "title": "Member Timed Out",
+    "titleEmoji": "⏱️",
+    "description": "**{user}** was timed out for **{duration}**.",
+    "footer": "L • Moderation",
+    "footerEmoji": "🛡️",
+    "color": "F1C40F",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "lock_success": {
+    "title": "Channel Locked",
+    "titleEmoji": "🔒",
+    "description": "{channel} has been locked.",
+    "footer": "L • Moderation",
+    "footerEmoji": "🛡️",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "purge_success": {
+    "title": "Messages Purged",
+    "titleEmoji": "🧹",
+    "description": "**{count}** messages were deleted from {channel}.",
+    "footer": "L • Moderation",
+    "footerEmoji": "🛡️",
+    "color": "57F287",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "greet_welcome": {
+    "title": "Welcome to the Server",
+    "titleEmoji": "👋",
+    "description": "Welcome {user} to **{server}**!\nYou are member #{count}.",
+    "footer": "L • Greetings",
+    "footerEmoji": "❤️",
+    "authorName": "L",
+    "authorEmoji": "👑",
+    "color": "57F287",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "greet_goodbye": {
+    "title": "Member Left",
+    "titleEmoji": "👋",
+    "description": "**{user}** has left the server.\nWe're down to **{count}** members.",
+    "footer": "L • Greetings",
+    "footerEmoji": "❤️",
+    "color": "949BA4",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "premium_status": {
+    "title": "Premium Active",
+    "titleEmoji": "💎",
+    "description": "This server has **L Premium** unlocked.\nAll premium commands are available.",
+    "footer": "L • Premium",
+    "footerEmoji": "👑",
+    "authorName": "L",
+    "authorEmoji": "💎",
+    "color": "F1C40F",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "success": {
+    "title": "Success",
+    "titleEmoji": "✅",
+    "description": "{detail}",
+    "footer": "L",
+    "footerEmoji": "👑",
+    "color": "57F287",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "error": {
+    "title": "Error",
+    "titleEmoji": "❌",
+    "description": "{detail}",
+    "footer": "L",
+    "footerEmoji": "👑",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "warn": {
+    "title": "Warning",
+    "titleEmoji": "⚠️",
+    "description": "{detail}",
+    "footer": "L",
+    "footerEmoji": "👑",
+    "color": "F1C40F",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  },
+  "no_perms": {
+    "title": "Missing Permissions",
+    "titleEmoji": "🚫",
+    "description": "You don't have permission to use this command.",
+    "footer": "L",
+    "footerEmoji": "👑",
+    "color": "ED4245",
+    "showTimestamp": true,
+    "useServerEmojis": true
+  }
+}

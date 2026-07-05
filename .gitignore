@@ -2,4 +2,3 @@ node_modules/
 serverdata/*.json
 .env
 *.log
-global_embeds.json

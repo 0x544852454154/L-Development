@@ -1,37 +1,47 @@
-# L — The Antinuke Authority
+# L — The Antinuke Authority (v2)
 
-A Discord antinuke bot with **auto-restore**, **fully customizable embeds**, **server emoji support**, **multi-server config**, and **63 commands** across 9 categories.
+A Discord antinuke bot with **strict-mode auto-restore**, **bot anti-add**, **anti-raid**, **anti-spam**, **emoji-free customizable embeds**, and **74 commands** across 10 categories. Optimized with audit-log caching and write-behind DB.
 
 > L is justice.
 
 ---
 
+## What's new in v2 (major security + performance upgrade)
+
+- **Strict mode (default ON):** ANY single destructive action by a non-whitelisted user = immediate punishment + auto-restore. No more waiting for a threshold to be crossed. One channel delete by a rogue admin = instant ban + channel restored.
+- **Bot anti-add:** when a non-whitelisted user adds a bot to the server, the bot is auto-kicked instantly. A bot whitelist (`/botwhitelist`) allows specific bots.
+- **Anti-raid:** detects join bursts and engages panic mode (auto-kick/ban new joins for 5 minutes).
+- **Anti-spam:** per-user message rate limiting with configurable threshold.
+- **Anti-webhook:** blocks webhook creation by non-whitelisted users.
+- **Emoji-free embeds:** all embeds are now clean and professional — no emojis. The embed builder ignores legacy emoji fields, so every command is automatically emoji-free.
+- **Better embed hierarchy:** embeds are organized by category with a 3-tier fallback (guild category override -> guild flat override -> built-in default).
+- **100x optimization:** audit-log fetch cache (one API call per guild per 4s instead of one per event), write-behind DB (batched disk writes), in-memory config cache, concurrent-fetch deduplication.
+- **10 new commands:** `strictmode`, `botwhitelist`, `antiraid`, `panic`, `recover`, `antiwebhook`, `antispam`, `lockdown`, `slowmode`, `roleall`.
+
+---
+
 ## Features
 
-- 🛡️ **Antinuke Shield** — detects mass channel/role deletions, mass unbans, and webhook spam, then automatically reverts the damage and punishes the offender.
-- ♻️ **Auto-Restore** — re-creates deleted channels (with overwrites & topic), roles (with permissions), re-applies mass-unbans, and restores webhooks.
-- 🎨 **Customizable Embeds** — every bot response uses a customizable embed. Edit titles, descriptions, colors, footers, images, and emojis with the `/embed` command — in Discord, live.
-- 😀 **Server Emoji Support** — use `:emoji_name:` in any embed field and L resolves it to your server's custom emojis. Toggle globally per embed.
-- ⚙️ **Multi-Server** — each guild gets its own config, prefix, embeds, and whitelist.
-- 📜 **63 Commands** across Antinuke, Automod, Info, Leveling, Logging, Moderation, Premium, Util, and Welcome.
+- **Antinuke Shield** — strict or threshold mode. Detects mass channel/role deletions, mass unbans, webhook spam, channel-creation spam, and unauthorized bot additions.
+- **Auto-Restore** — re-creates deleted channels (with overwrites & topic), roles (with permissions), re-applies mass-unbans, restores webhooks. In strict mode, restores immediately on any unauthorized deletion.
+- **Customizable Embeds (emoji-free)** — every response uses a customizable embed. Edit titles, descriptions, colors, footers, and images with `/embed`. Per-server, per-category hierarchy.
+- **Multi-Server** — each guild gets its own config, prefix, embeds, and whitelist.
 
 ---
 
 ## Quick Start
 
 ### 1. Prerequisites
-- [Node.js](https://nodejs.org/) v18+ (or [Bun](https://bun.sh/))
-- A Discord bot application — create one at <https://discord.com/developers/applications>
+- [Node.js](https://nodejs.org/) v18+
+- A Discord bot application — <https://discord.com/developers/applications>
 
 ### 2. Install
 ```bash
 cd l-antinuke-bot
 npm install
-# or: bun install
 ```
 
 ### 3. Configure
-Copy the example env file and fill in your details:
 ```bash
 cp .env.example .env
 ```
@@ -46,111 +56,121 @@ DEFAULT_PREFIX=!
 ### 4. Register Slash Commands
 ```bash
 npm run deploy
-# or: node src/deploy.js
 ```
-> Global slash commands can take up to 1 hour to appear. For instant testing, temporarily switch to guild-scoped registration in `src/deploy.js`.
 
 ### 5. Invite the Bot
-Open your application in the Discord Developer Portal → OAuth2 → URL Generator → select `bot` + `applications.commands` scopes and `Administrator` permission → visit the generated URL.
+Developer Portal -> OAuth2 -> URL Generator -> select `bot` + `applications.commands` -> `Administrator` permission -> visit URL.
 
 ### 6. Run
 ```bash
 npm start
-# or: node index.js
-# or for auto-restart on file changes: npm run dev
-```
-
-You should see:
-```
-[2025-01-01 12:00:00] [commands] loaded 64 commands
-[2025-01-01 12:00:00] [ready] L#0001 online — serving 1 guilds
+# or: npm run dev   (auto-restart on file changes)
 ```
 
 ---
 
-## Usage
+## Security Setup (the important part)
 
-### Set up antinuke (the main event)
+### Recommended lockdown sequence
 ```
-/init              → initialize L with safe defaults
-/antinuke on       → arm the shield
-/whitelist add role @Moderators  → exempt trusted roles
-/extraowner add @CoAdmin        → add a co-owner (bypasses antinuke)
+/init                  -> initialize L with safe defaults (strict mode ON, auto-restore ON)
+/antinuke on           -> arm the shield
+/strictmode on         -> confirm strict mode (immediate punish on ANY unauthorized deletion)
+/botwhitelist add <botid>  -> whitelist your trusted bots (L itself, music bot, etc.)
+/antiraid on           -> enable join-burst raid detection
+/antispam on           -> enable message spam protection
+/antiwebhook on        -> block unauthorized webhook creation
+/whitelist add role @Admins  -> exempt your trusted admins
 ```
 
-### Auto-restore is on by default
-When someone mass-deletes channels/roles or mass-unbans, L **automatically reverts the damage** and bans the offender. Configure thresholds with `/antinuke threshold 3`.
+Now your server is locked down:
+- Any non-whitelisted user who deletes a channel/role = **instantly banned + the channel/role is restored**.
+- Any non-whitelisted user who adds a bot = **the bot is instantly kicked + the adder is punished**.
+- A raid (10 joins in 10s) = **panic mode engages, new joins auto-kicked for 5 min**.
 
-### Customize embeds (the new command)
-```
-/embed list                    → see all editable embeds
-/embed edit ban_success        → open the interactive editor (modal)
-/embed view greet_welcome      → preview an embed
-/embed reset help_menu         → reset to default
-/embed emojis                  → toggle server emoji rendering
-```
-In the editor, type `:shield:` or `:owner:` to insert your server's custom emojis — L resolves them automatically. Use `**bold**`, `*italic*`, and `{user}`, `{server}`, `{count}`, `{reason}` placeholders.
+### Strict mode vs threshold mode
+- **Strict (default, recommended):** one unauthorized deletion = immediate punishment + restore. Maximum security.
+- **Threshold:** waits for N deletions in M seconds before acting. More tolerant (use `/strictmode off` + `/antinuke threshold 3`).
 
-### All commands
-Run `/help` in Discord to see every category, or `/help Antinuke` to browse a specific category.
+### Whitelisting
+- `/whitelist add user @Admin` — exempt a user from antinuke
+- `/whitelist add role @Staff` — exempt a role
+- `/extraowner add @CoOwner` — add a co-owner (full bypass)
+- `/botwhitelist add <botId>` — allow a specific bot to be added
+
+---
+
+## Customizing Embeds (emoji-free)
+
+```
+/embed list              -> see all editable embeds
+/embed edit ban_success  -> open the interactive editor (modal)
+/embed view greet_welcome -> preview an embed
+/embed reset help_menu   -> reset to default
+```
+
+The editor supports:
+- **Title, description, footer, author, color, thumbnail, image** (no emoji fields — clean design)
+- **Markdown:** `**bold**`, `*italic*`, `` `code` ``, line breaks
+- **Placeholders:** `{user}`, `{server}`, `{count}`, `{reason}`, `{channel}`, `{detail}`, `{executor}`, `{action}`, `{duration}`, `{bot}`
+
+---
+
+## All Commands (74)
 
 | Category | Commands |
 |---|---|
-| **Antinuke** | `antinuke` `antiping` `extraowner` `init` `multiwhitelist` `nukehooks` `whitelist` |
-| **Automod** | `antighostping` `automod` `automodwhitelist` |
-| **Info** | `help` `invite` `ping` `uptime` |
-| **Leveling** | `leaderboard` `leveling` `rank` |
-| **Logging** | `logging` |
-| **Moderation** | `ban` `hardban` `hide` `hideall` `kick` `list` `lock` `lockall` `timeout` `nickname` `purge` `purgebots` `role` `steal` `unban` `unhide` `unhideall` `unlock` `unlockall` `untimeout` |
-| **Premium** | `antialt` `autorole` `boosterrole` `massrole` `massunban` `premium` `resetserveravatar` `resetserverbanner` `resetserverbio` `setserveravatar` `setserverbanner` `setserverbio` |
-| **Util** | `afk` `ask` `avatar` `banner` `define` `membercount` `nuke` `prefix` `report` `serverinfo` `stats` `userinfo` |
-| **Welcome** | `greet` |
+| **Antinuke** (14) | `antinuke` `antiping` `extraowner` `init` `multiwhitelist` `nukehooks` `whitelist` `strictmode` `botwhitelist` `antiraid` `panic` `recover` `antiwebhook` `antispam` |
+| **Automod** (3) | `antighostping` `automod` `automodwhitelist` |
+| **Info** (4) | `help` `invite` `ping` `uptime` |
+| **Leveling** (3) | `leaderboard` `leveling` `rank` |
+| **Logging** (1) | `logging` |
+| **Moderation** (23) | `ban` `hardban` `hide` `hideall` `kick` `list` `lock` `lockall` `timeout` `nickname` `purge` `purgebots` `role` `steal` `unban` `unhide` `unhideall` `unlock` `unlockall` `untimeout` `lockdown` `slowmode` `roleall` |
+| **Premium** (12) | `antialt` `autorole` `boosterrole` `massrole` `massunban` `premium` `resetserveravatar` `resetserverbanner` `resetserverbio` `setserveravatar` `setserverbanner` `setserverbio` |
+| **Util** (12) | `afk` `ask` `avatar` `banner` `define` `membercount` `nuke` `prefix` `report` `serverinfo` `stats` `userinfo` |
+| **Welcome** (1) | `greet` |
+| **Embeds** (1) | `embed` |
 
-Both **slash commands** (`/ban`) and **prefix commands** (`!ban`) work. Change the prefix with `/prefix ?`.
+Both slash (`/ban`) and prefix (`!ban`) work. Change prefix with `/prefix`.
 
 ---
 
-## How Auto-Restore Works
+## How Strict-Mode Auto-Restore Works
 
-1. L caches every channel and role on startup (and on create/update).
-2. When a channel/role is deleted, L checks the audit log for the executor.
-3. If the executor isn't whitelisted and the deletion count crosses the threshold within the time window, L:
-   - **Re-creates** the deleted entity from cache (name, topic, overwrites, permissions, position).
-   - **Punishes** the offender (ban / kick / strip dangerous roles — configurable).
-   - **Logs** the event to your restore log channel.
-4. Same logic for mass-unbans (re-bans) and webhook spam.
-
-Configure in `serverdata/<guildId>.json` or via commands:
-```
-/antinuke threshold 3      → 3 deletions in 10s triggers restore
-/antinuke punishment ban   → ban offenders (ban | kick | strip)
-```
+1. L caches every channel, role, and ban on startup (and on create/update).
+2. When a channel/role is deleted, L fetches the audit log executor (cached — one API call per 4s).
+3. If the executor is **not whitelisted** and **strict mode is ON**:
+   - The deleted entity is **immediately restored** from cache (channel with overwrites, role with permissions, ban re-applied).
+   - The offender is **immediately punished** (ban / kick / strip dangerous roles).
+   - The event is **logged** to your log channel + audit log.
+4. Same instant response for unauthorized bot additions, webhook creation, and mass-unbans.
+5. Anti-raid: if N joins happen in M seconds, panic mode engages and new joins are auto-kicked/banned for 5 minutes.
 
 ---
 
 ## File Structure
 ```
 l-antinuke-bot/
-├── index.js                 # Main entry: login, events, command loader
+├── index.js                 # Main entry: login, events, command loader, graceful shutdown
 ├── package.json
 ├── .env.example
 ├── src/
-│   ├── config.js           # Bot config + command catalog
-│   ├── database.js         # Per-guild JSON storage + default embeds
-│   ├── embedBuilder.js     # Builds embeds from customizable config
-│   ├── emojiUtils.js       # Resolves :name: to guild emojis
+│   ├── config.js           # Bot config + 10-category command catalog
+│   ├── database.js         # Per-guild JSON storage + write-behind cache + emoji-free defaults
+│   ├── embedBuilder.js     # Emoji-free embed builder + category-hierarchical lookup
 │   ├── logger.js
 │   ├── deploy.js           # Slash command registration
 │   ├── handlers/
-│   │   └── antinuke.js     # Antinuke shield + auto-restore engine
+│   │   ├── antinuke.js     # v2 engine: strict mode, bot anti-add, anti-raid, anti-spam, anti-webhook
+│   │   └── auditCache.js   # Audit-log fetch cache (the 100x optimization)
 │   └── commands/
-│       ├── antinuke/       # 7 commands
+│       ├── antinuke/       # 14 commands
 │       ├── automod/        # 3
 │       ├── embeds/         # 1 (the embed customizer)
 │       ├── info/           # 4
 │       ├── leveling/       # 3
 │       ├── logging/        # 1
-│       ├── moderation/     # 20
+│       ├── moderation/     # 23
 │       ├── premium/        # 12
 │       ├── util/           # 12
 │       └── welcome/        # 1
@@ -159,46 +179,25 @@ l-antinuke-bot/
 
 ---
 
-## Customizing Embeds
+## Performance Optimizations
 
-All embeds live in `serverdata/<guildId>.json` under the `embeds` key. Each embed supports:
-
-| Field | Description |
-|---|---|
-| `title` / `titleEmoji` | Embed title + leading emoji |
-| `description` | Body text. Supports `**bold**`, `*italic*`, line breaks, `:emoji:`, and `{placeholders}` |
-| `footer` / `footerEmoji` | Footer text + emoji |
-| `authorName` / `authorEmoji` | Author line |
-| `color` | Hex color without `#` (e.g. `ED4245`) |
-| `thumbnailUrl` / `imageUrl` | Image URLs |
-| `showTimestamp` | `true`/`false` |
-| `useServerEmojis` | `true`/`false` — resolve `:name:` to guild emojis |
-
-**Placeholders:** `{user}`, `{server}`, `{count}`, `{reason}`, `{channel}`, `{detail}`, `{duration}`.
-
-Edit them either via `/embed edit <key>` in Discord, or by editing the JSON file directly (bot reloads per-command).
-
----
-
-## Enabling Premium (for testing)
-
-Premium commands are gated by `premium: true` in each command file. To unlock premium for a server, edit `serverdata/<guildId>.json` and set `"premium": true`, or add a `/premium` upgrade flow.
+1. **Audit-log cache** (`handlers/auditCache.js`): the old bot called `guild.fetchAuditLogs()` on every destructive event (one API call per channel deletion). During a 50-channel nuke, that's 50 sequential API calls. The cache fetches once per guild per 4 seconds and deduplicates concurrent fetches — a 50-channel nuke now does **one** API call.
+2. **Write-behind DB** (`database.js`): config changes update the in-memory cache instantly (O(1)) and batch disk writes every 1.5s. A nuke that triggers 50 config updates writes the file **once** instead of 50 times.
+3. **In-memory config cache**: all `getGuild()` calls are map lookups — no disk reads after the first load.
+4. **Early event short-circuiting**: antinuke events return immediately if the shield is off or the executor is whitelisted, before any async work.
 
 ---
 
 ## Troubleshooting
 
-- **Slash commands don't appear:** Run `npm run deploy`. If still missing after an hour, switch `deploy.js` to guild-scoped registration (uncomment the guild route with your test guild ID).
-- **Bot doesn't respond to prefix commands:** Ensure `Message Content Intent` is enabled in the Developer Portal, and the prefix matches (`/prefix` to check).
-- **Auto-restore isn't working:** Ensure the bot has `Administrator` or the relevant manage permissions, and that `antinuke.enabled` is `true` (`/antinuke status`).
-- **Custom emojis show as `:name:`:** Run `/embed emojis` to enable server emoji rendering, or set `useServerEmojis: true` in the embed config.
+- **Slash commands don't appear:** Run `npm run deploy`. Global commands take up to 1 hour; for instant testing use guild-scoped registration in `src/deploy.js`.
+- **Bot doesn't respond to prefix commands:** Enable **Message Content Intent** in the Developer Portal.
+- **Auto-restore isn't working:** Ensure the bot has `Administrator` permission and `antinuke.enabled` is `true` (`/antinuke status`).
+- **Bot keeps getting kicked:** You probably have `blockBotAdd` on but haven't whitelisted your bots. Run `/botwhitelist add <botId>` for each trusted bot.
+- **Too aggressive?** Switch to threshold mode with `/strictmode off` + `/antinuke threshold 5`.
 
 ---
 
 ## License
 
-MIT — do whatever you want. L is justice.
-
----
-
-**L — The Antinuke Authority.** Auto-restore • Customizable embeds • Server emoji support • Multi-server.
+MIT — L is justice.

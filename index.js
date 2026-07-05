@@ -10,7 +10,7 @@ const {
   PermissionsBitField,
 } = require("discord.js");
 const config = require("./src/config");
-const { getGuild, updateGuild, addAudit } = require("./src/database");
+const { getGuild, updateGuild, addAudit, flushNow } = require("./src/database");
 const { sendEmbed, success, error } = require("./src/embedBuilder");
 const antinuke = require("./src/handlers/antinuke");
 const logger = require("./src/logger");
@@ -191,6 +191,16 @@ client.on(Events.GuildCreate, (guild) => {
 client.on(Events.Error, (e) => logger.error("[client error]", e.message));
 client.on(Events.Warn, (w) => logger.warn("[client warn]", w));
 process.on("unhandledRejection", (e) => logger.error("[unhandledRejection]", e));
+
+// ===== Graceful shutdown — flush pending DB writes =====
+async function shutdown(signal) {
+  logger.log(`[shutdown] ${signal} received — flushing DB and exiting`);
+  try { flushNow(); } catch (e) { logger.error("[shutdown] flush failed", e.message); }
+  try { await client.destroy(); } catch {}
+  process.exit(0);
+}
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
