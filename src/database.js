@@ -103,6 +103,9 @@ function defaultGuildData() {
     welcome: { channel: null, goodbyeChannel: null, enabled: false, goodbyeEnabled: false },
     // Leveling
     leveling: { enabled: false, channel: null, xp: {}, ignoreChannels: [] },
+    // Server identity lock — snapshot of the protected name/icon/description.
+    // Any unauthorized change to these is reverted to the snapshot.
+    serverIdentity: { name: null, iconUrl: null, description: null, locked: false },
     // Embeds (emoji-free, flat for backward compat)
     embeds: JSON.parse(JSON.stringify(DEFAULT_EMBEDS)),
     // AFK
@@ -140,6 +143,7 @@ function getGuild(guildId) {
       logging: { ...def.logging, ...(data.logging || {}) },
       welcome: { ...def.welcome, ...(data.welcome || {}) },
       leveling: { ...def.leveling, ...(data.leveling || {}) },
+      serverIdentity: { ...def.serverIdentity, ...(data.serverIdentity || {}) },
     };
   } catch {
     data = defaultGuildData();

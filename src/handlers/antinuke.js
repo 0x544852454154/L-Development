@@ -2,6 +2,7 @@ const { AuditLogEvent, PermissionFlagsBits, ChannelType } = require("discord.js"
 const { getGuild, updateGuild, addAudit } = require("../database");
 const { buildEmbed } = require("../embedBuilder");
 const { fetchExecutor } = require("./auditCache");
+const config = require("../config");
 const logger = require("../logger");
 
 /*
@@ -309,42 +310,109 @@ function setup(client) {
     }
   });
 
-  // ====== CHANNEL RENAME → BAN (NEW) ======
+  // ====== CHANNEL UPDATE (rename protection + cache integrity) ======
   client.on("channelUpdate", async (oldChannel, newChannel) => {
     if (!newChannel.guild) return;
-    cacheChannel(newChannel); // keep cache fresh
     const data = getGuild(newChannel.guild.id);
-    if (!data.antinuke.enabled || !data.antinuke.strict) return;
-    // Only trigger on NAME change
-    if (oldChannel.name === newChannel.name) return;
+    if (!data.antinuke.enabled || !data.antinuke.strict) {
+      cacheChannel(newChannel); // shield off — just keep cache fresh
+      return;
+    }
+    // Only act on NAME change (other updates like topic/position are non-destructive)
+    if (oldChannel.name === newChannel.name) {
+      cacheChannel(newChannel); // non-name update — safe to refresh cache
+      return;
+    }
 
+    // Name changed — check who did it
     const executor = await fetchExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
-    if (!executor || isWhitelisted(newChannel.guild, executor)) return;
+    if (!executor || isWhitelisted(newChannel.guild, executor)) {
+      cacheChannel(newChannel); // legitimate rename — update cache to new name
+      return;
+    }
 
-    // Revert the name + ban
-    try { await newChannel.edit({ name: oldChannel.name }, `[L Antinuke] Reverted unauthorized channel rename`); } catch {}
+    // Unauthorized rename — revert to the ORIGINAL cached name (not oldChannel.name,
+    // which could itself be a previous unauthorized rename the bot missed).
+    // The cache holds the last known-good name.
+    const cached = channelCache.get(newChannel.id);
+    const originalName = cached?.name || oldChannel.name;
+    try {
+      await newChannel.edit({ name: originalName }, `[L Antinuke] Reverted unauthorized channel rename`);
+    } catch {}
+    // Do NOT update the cache — keep the original name so future renames also revert to it
     await punish(newChannel.guild, executor.id, `Unauthorized channel rename (#${oldChannel.name} -> #${newChannel.name})`);
     await alertGuild(newChannel.guild, "antinuke_triggered", {
       action: "channel rename", executor: executor.tag,
-      detail: `Renamed #${oldChannel.name} to #${newChannel.name} — reverted and offender punished.`,
+      detail: `Renamed #${oldChannel.name} to #${newChannel.name} — reverted to #${originalName} and offender punished.`,
     });
   });
 
-  // ====== SERVER RENAME → BAN (NEW) ======
+  // ====== SERVER UPDATE (name + icon + description protection) ======
   client.on("guildUpdate", async (oldGuild, newGuild) => {
     const data = getGuild(newGuild.id);
     if (!data.antinuke.enabled || !data.antinuke.strict) return;
-    if (oldGuild.name === newGuild.name) return;
+    // Only act if the identity lock is active
+    const identity = data.serverIdentity || {};
+    if (identity.locked === false) return;
+
+    // Detect changes to name, icon (hash), and description
+    const nameChanged = oldGuild.name !== newGuild.name;
+    const iconChanged = oldGuild.icon !== newGuild.icon; // icon hash comparison
+    const descChanged = oldGuild.description !== newGuild.description;
+    if (!nameChanged && !iconChanged && !descChanged) return;
 
     const executor = await fetchExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id);
-    if (!executor || isWhitelisted(newGuild, executor)) return;
+    if (!executor || isWhitelisted(newGuild, executor)) {
+      // Legitimate change by a whitelisted user — update the identity snapshot
+      // so future unauthorized changes revert to THIS new state
+      updateGuild(newGuild.id, (d) => {
+        d.serverIdentity = {
+          name: newGuild.name,
+          iconUrl: newGuild.iconURL(),
+          description: newGuild.description,
+          locked: d.serverIdentity?.locked || true,
+        };
+      });
+      return;
+    }
 
-    // Revert the name + ban
-    try { await newGuild.setName(oldGuild.name, `[L Antinuke] Reverted unauthorized server rename`); } catch {}
-    await punish(newGuild, executor.id, `Unauthorized server rename (${oldGuild.name} -> ${newGuild.name})`);
+    // Unauthorized server modification — revert ALL changes + ban
+    const revertPromises = [];
+
+    if (nameChanged) {
+      const targetName = identity.name || oldGuild.name;
+      revertPromises.push(
+        newGuild.setName(targetName, "[L Antinuke] Reverted unauthorized server rename").catch(() => {})
+      );
+    }
+    if (iconChanged) {
+      // Revert to the locked identity icon, or the old icon, or the protected L icon
+      const targetIcon = identity.iconUrl || oldGuild.iconURL() || config.protectedServerIcon;
+      if (targetIcon) {
+        revertPromises.push(
+          newGuild.setIcon(targetIcon, "[L Antinuke] Reverted unauthorized server icon change").catch(() => {})
+        );
+      } else if (!newGuild.icon) {
+        // icon was removed and there's no target — try the protected L icon
+        revertPromises.push(
+          newGuild.setIcon(config.protectedServerIcon, "[L Antinuke] Restored protected server icon").catch(() => {})
+        );
+      }
+    }
+    if (descChanged) {
+      const targetDesc = identity.description !== null && identity.description !== undefined ? identity.description : oldGuild.description;
+      revertPromises.push(
+        newGuild.setDescription(targetDesc || null, "[L Antinuke] Reverted unauthorized server description change").catch(() => {})
+      );
+    }
+
+    await Promise.allSettled(revertPromises);
+    await punish(newGuild, executor.id, `Unauthorized server modification (name/icon/description)`);
+
+    const changes = [nameChanged && "name", iconChanged && "icon", descChanged && "description"].filter(Boolean);
     await alertGuild(newGuild, "antinuke_triggered", {
-      action: "server rename", executor: executor.tag,
-      detail: `Server renamed from "${oldGuild.name}" to "${newGuild.name}" — reverted and offender punished.`,
+      action: `server ${changes.join("/") || "modification"}`, executor: executor.tag,
+      detail: `Server ${changes.join(", ")} changed by ${executor.tag} — reverted and offender punished.`,
     });
   });
 

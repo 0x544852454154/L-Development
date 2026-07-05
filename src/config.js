@@ -12,6 +12,12 @@ module.exports = {
   tagline: "The Antinuke Authority",
   color: 0xed4245,
 
+  // The official L server icon — used as the restore target when an unauthorized
+  // user changes the server icon. Set via /init or /lockidentity.
+  // NOTE: Discord attachment URLs expire. For permanent use, re-upload to a
+  // permanent host and update this URL.
+  protectedServerIcon: "https://cdn.discordapp.com/attachments/1509164528460632085/1523390595828023447/L..jpg?ex=6a4bef8d&is=6a4a9e0d&hm=bf0ac161e15fa059c8be61496ac728c4c5e250221c3b6dee1f3f92939ac34a0c&",
+
   // Antinuke defaults — strict mode ON by default for maximum security
   antinuke: {
     defaultThreshold: 3,
@@ -25,7 +31,7 @@ module.exports = {
     {
       name: "Antinuke",
       blurb: "Strict antinuke shield, auto-restore, whitelists, anti-ping, bot anti-add, anti-raid, anti-spam & anti-webhook.",
-      commands: ["antinuke", "antiping", "extraowner", "init", "multiwhitelist", "nukehooks", "whitelist", "strictmode", "botwhitelist", "antiraid", "panic", "recover", "antiwebhook", "antispam"],
+      commands: ["antinuke", "antiping", "extraowner", "init", "multiwhitelist", "nukehooks", "whitelist", "strictmode", "botwhitelist", "antiraid", "panic", "recover", "antiwebhook", "antispam", "lockidentity"],
     },
     {
       name: "Automod",

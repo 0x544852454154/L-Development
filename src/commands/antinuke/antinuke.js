@@ -78,6 +78,13 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
       d.antinuke.antiSpam = true;
       d.antinuke.blockBotAdd = true;
       d.antiRaid.enabled = true;
+      // Snapshot the server identity for the identity lock
+      d.serverIdentity = {
+        name: guild.name,
+        iconUrl: guild.iconURL(),
+        description: guild.description,
+        locked: true,
+      };
     });
     addAudit(guild.id, "Antinuke Enabled", user.tag, "Antinuke shield + ALL protections armed", "warning");
     const embed = buildFromConfig({
@@ -134,6 +141,7 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
   if (action === "status") {
     const a = data.antinuke;
     const ar = data.antiRaid;
+    const id = data.serverIdentity || {};
     const on = (v) => v ? "ON" : "OFF";
     const cfg = {
       title: "Antinuke Status",
@@ -148,7 +156,8 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
         `Anti-Webhook: ${on(a.antiWebhook)} (create + use blocked)\n` +
         `Anti-Spam: ${on(a.antiSpam)} (threshold: ${a.spamThreshold || 7}/5s)\n` +
         `Bot Anti-Add: ${on(a.blockBotAdd)} (${a.whitelistedBots.length} whitelisted)\n` +
-        `Anti-Raid: ${on(ar.enabled)} (${ar.panicMode ? "PANIC MODE" : "standby"})\n\n` +
+        `Anti-Raid: ${on(ar.enabled)} (${ar.panicMode ? "PANIC MODE" : "standby"})\n` +
+        `Identity Lock: ${on(id.locked)} (name/icon/description protected)\n\n` +
         `**Whitelists:**\n` +
         `Users: ${a.whitelistedUsers.length} | Roles: ${a.whitelistedRoles.length} | Extra Owners: ${a.extraOwners.length} | Bots: ${a.whitelistedBots.length}`,
       color: a.enabled ? "57F287" : "ED4245",
