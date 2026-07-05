@@ -10,8 +10,9 @@ const {
   TextInputStyle,
   ModalBuilder,
 } = require("discord.js");
-const { getGuild, updateGuild, DEFAULT_EMBEDS } = require("../../database");
+const { getGuild, updateGuild, DEFAULT_EMBEDS, loadGlobalEmbeds, updateGlobalEmbed, resetGlobalEmbed } = require("../../database");
 const { buildFromConfig } = require("../../embedBuilder");
+const config = require("../../config");
 
 // All editable embed keys + a friendly label
 const EMBED_OPTIONS = [
@@ -46,10 +47,14 @@ const FIELDS = [
   { key: "imageUrl", label: "Image URL", placeholder: "https://..." },
 ];
 
+function isOwner(userId) {
+  return userId === config.ownerId;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("embed")
-    .setDescription("Customize the bot's embed messages (title, description, color, emojis)")
+    .setDescription("Customize the bot's embed messages (title, description, color, emojis) - OWNER ONLY")
     .addStringOption((o) =>
       o.setName("action").setDescription("What to do").setRequired(true)
         .addChoices(
@@ -60,22 +65,25 @@ module.exports = {
           { name: "emojis — toggle server emoji rendering", value: "emojis" },
         )
     )
-    .addStringOption((o) => o.setName("embed").setDescription("Embed key to edit/view/reset").setRequired(false))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .addStringOption((o) => o.setName("embed").setDescription("Embed key to edit/view/reset").setRequired(false)),
   name: "embed",
   category: "Info",
-  permissions: [PermissionFlagsBits.ManageGuild],
+  ownerOnly: true,
   aliases: ["embeds", "customize"],
 
   async executeInteraction(interaction, client) {
+    if (!isOwner(interaction.user.id)) {
+      return interaction.reply({ content: "❌ This command is restricted to the bot owner only.", ephemeral: true });
+    }
+
     const action = interaction.options.getString("action");
     const embedKey = interaction.options.getString("embed");
-    const data = getGuild(interaction.guild.id);
+    const globalEmbeds = loadGlobalEmbeds();
 
     if (action === "list") {
       const lines = EMBED_OPTIONS.map((o) => `\`${o.key}\` — ${o.label}`);
       const embed = buildFromConfig(
-        { title: "Editable Embeds", titleEmoji: "🎨", description: lines.join("\n"), color: "2B2D31", footer: "Use /embed edit <key>", footerEmoji: "👑", showTimestamp: false },
+        { title: "Editable Embeds (Global)", titleEmoji: "🎨", description: lines.join("\n") + "\n\n*Changes apply to ALL servers*", color: "2B2D31", footer: "Use /embed edit <key>", footerEmoji: "👑", showTimestamp: false },
         interaction.guild
       );
       return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -83,14 +91,15 @@ module.exports = {
 
     if (action === "emojis") {
       // Toggle server emoji rendering globally for all embeds
-      const current = data.embeds && Object.values(data.embeds)[0]?.useServerEmojis !== false;
-      updateGuild(interaction.guild.id, (d) => {
-        for (const cfg of Object.values(d.embeds || {})) {
-          cfg.useServerEmojis = !current;
-        }
-      });
+      const current = Object.values(globalEmbeds)[0]?.useServerEmojis !== false;
+      for (const key of Object.keys(globalEmbeds)) {
+        globalEmbeds[key].useServerEmojis = !current;
+      }
+      // Save by updating one embed (triggers save of entire cache)
+      updateGlobalEmbed("antinuke_enabled", globalEmbeds["antinuke_enabled"]);
+
       const embed = buildFromConfig(
-        { title: "Server Emoji Rendering", titleEmoji: current ? "❌" : "✅", description: `Server emoji rendering is now **${!current ? "ENABLED" : "DISABLED"}**.\n\nWhen enabled, \`:name:\` tokens resolve to your server's custom emojis.`, color: !current ? "57F287" : "ED4245", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: true },
+        { title: "Server Emoji Rendering (Global)", titleEmoji: current ? "❌" : "✅", description: `Server emoji rendering is now **${!current ? "ENABLED" : "DISABLED"}** for ALL servers.\n\nWhen enabled, \`:name:\` tokens resolve to your server's custom emojis.`, color: !current ? "57F287" : "ED4245", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: true },
         interaction.guild
       );
       return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -108,29 +117,27 @@ module.exports = {
         );
       const row = new ActionRowBuilder().addComponents(select);
       const embed = buildFromConfig(
-        { title: "Embed Customizer", titleEmoji: "🎨", description: `Pick the embed you want to **${action}**.\nYou can use \`:emoji_name:\` to insert your server's custom emojis.`, color: "2B2D31", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: false },
+        { title: "Embed Customizer (Global)", titleEmoji: "🎨", description: `Pick the embed you want to **${action}**.\nYou can use \`:emoji_name:\` to insert your server's custom emojis.\n\n*Changes apply to ALL servers*`, color: "2B2D31", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: false },
         interaction.guild
       );
       return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
     if (action === "view") {
-      const cfg = data.embeds[embedKey];
+      const cfg = globalEmbeds[embedKey];
       if (!cfg) return interaction.reply({ content: `Embed \`${embedKey}\` not found.`, ephemeral: true });
       const embed = buildFromConfig(cfg, interaction.guild, { user: "@user", server: interaction.guild.name, count: "123", reason: "example reason", channel: "#general", detail: "example detail" });
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (action === "reset") {
-      updateGuild(interaction.guild.id, (d) => {
-        if (DEFAULT_EMBEDS[embedKey]) d.embeds[embedKey] = JSON.parse(JSON.stringify(DEFAULT_EMBEDS[embedKey]));
-      });
-      const embed = buildFromConfig({ title: "Embed Reset", titleEmoji: "♻️", description: `Embed \`${embedKey}\` was reset to its default.`, color: "57F287", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: true }, interaction.guild);
+      resetGlobalEmbed(embedKey);
+      const embed = buildFromConfig({ title: "Embed Reset (Global)", titleEmoji: "♻️", description: `Embed \`${embedKey}\` was reset to its default for ALL servers.`, color: "57F287", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: true }, interaction.guild);
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     if (action === "edit") {
-      const cfg = data.embeds[embedKey];
+      const cfg = globalEmbeds[embedKey];
       if (!cfg) return interaction.reply({ content: `Embed \`${embedKey}\` not found. Run \`/embed list\` to see valid keys.`, ephemeral: true });
 
       // Build a modal with the editable fields
@@ -152,12 +159,12 @@ module.exports = {
       const filter = (i) => i.customId === `embed_edit_${embedKey}` && i.user.id === interaction.user.id;
       try {
         const submission = await interaction.awaitModalSubmit({ filter, time: 600000 });
-        updateGuild(interaction.guild.id, (d) => {
-          for (const f of FIELDS.slice(0, 5)) {
-            const v = submission.fields.getTextInputValue(f.key);
-            if (v !== null && v !== undefined) d.embeds[embedKey][f.key] = v;
-          }
-        });
+        // Update global embeds with first batch
+        for (const f of FIELDS.slice(0, 5)) {
+          const v = submission.fields.getTextInputValue(f.key);
+          if (v !== null && v !== undefined) globalEmbeds[embedKey][f.key] = v;
+        }
+        updateGlobalEmbed(embedKey, globalEmbeds[embedKey]);
 
         // Ask for the remaining fields
         const modal2 = new ModalBuilder().setCustomId(`embed_edit2_${embedKey}`).setTitle(`Edit (2/2): ${embedKey.slice(0, 18)}`);
@@ -165,7 +172,7 @@ module.exports = {
           const ti = new TextInputBuilder()
             .setCustomId(f.key)
             .setLabel(f.label)
-            .setValue(String(cfg[f.key] ?? ""))
+            .setValue(String(globalEmbeds[embedKey][f.key] ?? ""))
             .setPlaceholder(f.placeholder || "")
             .setStyle(f.style || TextInputStyle.Short)
             .setRequired(false);
@@ -176,17 +183,17 @@ module.exports = {
 
         const filter2 = (i) => i.customId === `embed_edit2_${embedKey}` && i.user.id === interaction.user.id;
         const submission2 = await submission.awaitModalSubmit({ filter: filter2, time: 600000 });
-        updateGuild(interaction.guild.id, (d) => {
-          for (const f of FIELDS.slice(5)) {
-            const v = submission2.fields.getTextInputValue(f.key);
-            if (v !== null && v !== undefined) d.embeds[embedKey][f.key] = v;
-          }
-          // Also toggle server emojis + timestamp on color presence
-          d.embeds[embedKey].showTimestamp = d.embeds[embedKey].showTimestamp !== false;
-        });
+        // Update global embeds with second batch
+        for (const f of FIELDS.slice(5)) {
+          const v = submission2.fields.getTextInputValue(f.key);
+          if (v !== null && v !== undefined) globalEmbeds[embedKey][f.key] = v;
+        }
+        // Also toggle server emojis + timestamp on color presence
+        globalEmbeds[embedKey].showTimestamp = globalEmbeds[embedKey].showTimestamp !== false;
+        updateGlobalEmbed(embedKey, globalEmbeds[embedKey]);
 
         // Show a live preview + toggle buttons
-        const updated = getGuild(interaction.guild.id).embeds[embedKey];
+        const updated = loadGlobalEmbeds()[embedKey];
         const preview = buildFromConfig(updated, interaction.guild, { user: "@user", server: interaction.guild.name, count: "123", reason: "example reason", channel: "#general", detail: "example detail" });
 
         const row = new ActionRowBuilder().addComponents(
@@ -195,7 +202,7 @@ module.exports = {
           new ButtonBuilder().setCustomId(`embed_preview_${embedKey}`).setLabel("Preview").setStyle(ButtonStyle.Primary).setEmoji("👁️"),
         );
 
-        await submission2.reply({ content: "✅ Embed saved! Live preview + toggles below.", embeds: [preview], components: [row], ephemeral: true });
+        await submission2.reply({ content: "✅ Embed saved globally! Changes apply to ALL servers. Live preview + toggles below.", embeds: [preview], components: [row], ephemeral: true });
       } catch (e) {
         // Modal timeout — ignore
       }
@@ -204,37 +211,42 @@ module.exports = {
   },
 
   async execute(message, args, client) {
+    if (!isOwner(message.author.id)) {
+      return message.reply("❌ This command is restricted to the bot owner only.");
+    }
+
     const action = args[0] || "list";
+    const globalEmbeds = loadGlobalEmbeds();
     // Reuse the interaction logic by constructing a pseudo-interaction is complex;
     // for prefix, show the help + list.
     const data = getGuild(message.guild.id);
     if (action === "list" || !args[1]) {
       const lines = EMBED_OPTIONS.map((o) => `\`${o.key}\``);
       const embed = buildFromConfig(
-        { title: "Embed Customizer", titleEmoji: "🎨", description: `**Usage:**\n\`${data.prefix}embed edit <key>\` — customize\n\`${data.prefix}embed view <key>\` — preview\n\`${data.prefix}embed reset <key>\` — reset\n\`${data.prefix}embed emojis\` — toggle server emojis\n\n**Editable embeds:**\n${lines.join("\n")}`, color: "2B2D31", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: false },
+        { title: "Embed Customizer (Global)", titleEmoji: "🎨", description: `**Usage:**\n\`${data.prefix}embed edit <key>\` — customize\n\`${data.prefix}embed view <key>\` — preview\n\`${data.prefix}embed reset <key>\` — reset\n\`${data.prefix}embed emojis\` — toggle server emojis\n\n**Editable embeds:**\n${lines.join("\n")}\n\n*Changes apply to ALL servers*`, color: "2B2D31", footer: "L • Embed Customizer", footerEmoji: "🎨", showTimestamp: false },
         message.guild
       );
       return message.reply({ embeds: [embed] });
     }
     const embedKey = args[1];
     if (action === "view") {
-      const cfg = data.embeds[embedKey];
+      const cfg = globalEmbeds[embedKey];
       if (!cfg) return message.reply(`Embed \`${embedKey}\` not found.`);
       const embed = buildFromConfig(cfg, message.guild, { user: "@user", server: message.guild.name, count: "123", reason: "example reason", channel: "#general", detail: "example detail" });
       return message.reply({ embeds: [embed] });
     }
     if (action === "reset") {
-      updateGuild(message.guild.id, (d) => {
-        if (DEFAULT_EMBEDS[embedKey]) d.embeds[embedKey] = JSON.parse(JSON.stringify(DEFAULT_EMBEDS[embedKey]));
-      });
-      return message.reply(`♻️ Reset \`${embedKey}\` to default.`);
+      resetGlobalEmbed(embedKey);
+      return message.reply(`♻️ Reset \`${embedKey}\` to default for ALL servers.`);
     }
     if (action === "emojis") {
-      const current = data.embeds && Object.values(data.embeds)[0]?.useServerEmojis !== false;
-      updateGuild(message.guild.id, (d) => {
-        for (const cfg of Object.values(d.embeds || {})) cfg.useServerEmojis = !current;
-      });
-      return message.reply(`Server emoji rendering is now **${!current ? "ENABLED" : "DISABLED"}**.`);
+      const current = Object.values(globalEmbeds)[0]?.useServerEmojis !== false;
+      for (const key of Object.keys(globalEmbeds)) {
+        globalEmbeds[key].useServerEmojis = !current;
+      }
+      // Save by updating one embed (triggers save of entire cache)
+      updateGlobalEmbed("antinuke_enabled", globalEmbeds["antinuke_enabled"]);
+      return message.reply(`Server emoji rendering is now **${!current ? "ENABLED" : "DISABLED"}** for ALL servers.`);
     }
     if (action === "edit") {
       return message.reply(`Use the slash command \`/embed edit ${embedKey}\` for the full interactive editor. (Modals work best with slash commands.)`);
@@ -244,6 +256,10 @@ module.exports = {
 
 // Button + select-menu handler (registered in index via a separate event hook)
 module.exports.handleComponent = async (interaction, client) => {
+  if (!isOwner(interaction.user.id)) {
+    return interaction.reply({ content: "❌ This command is restricted to the bot owner only.", ephemeral: true });
+  }
+
   const [type, , ...rest] = interaction.customId.split("_");
   // Patterns: embed_select_<action>, embed_toggle_emojis_<key>, embed_toggle_timestamp_<key>, embed_preview_<key>
   if (interaction.customId.startsWith("embed_select_")) {
@@ -268,21 +284,21 @@ module.exports.handleComponent = async (interaction, client) => {
   }
   if (interaction.customId.startsWith("embed_toggle_emojis_")) {
     const embedKey = interaction.customId.replace("embed_toggle_emojis_", "");
-    updateGuild(interaction.guild.id, (d) => {
-      d.embeds[embedKey].useServerEmojis = !(d.embeds[embedKey].useServerEmojis !== false);
-    });
-    return interaction.reply({ content: `🎨 Server emojis toggled for \`${embedKey}\`.`, ephemeral: true });
+    const globalEmbeds = loadGlobalEmbeds();
+    globalEmbeds[embedKey].useServerEmojis = !(globalEmbeds[embedKey].useServerEmojis !== false);
+    updateGlobalEmbed(embedKey, globalEmbeds[embedKey]);
+    return interaction.reply({ content: `🎨 Server emojis toggled for \`${embedKey}\` (GLOBAL).`, ephemeral: true });
   }
   if (interaction.customId.startsWith("embed_toggle_timestamp_")) {
     const embedKey = interaction.customId.replace("embed_toggle_timestamp_", "");
-    updateGuild(interaction.guild.id, (d) => {
-      d.embeds[embedKey].showTimestamp = !d.embeds[embedKey].showTimestamp;
-    });
-    return interaction.reply({ content: `🕐 Timestamp toggled for \`${embedKey}\`.`, ephemeral: true });
+    const globalEmbeds = loadGlobalEmbeds();
+    globalEmbeds[embedKey].showTimestamp = !globalEmbeds[embedKey].showTimestamp;
+    updateGlobalEmbed(embedKey, globalEmbeds[embedKey]);
+    return interaction.reply({ content: `🕐 Timestamp toggled for \`${embedKey}\` (GLOBAL).`, ephemeral: true });
   }
   if (interaction.customId.startsWith("embed_preview_")) {
     const embedKey = interaction.customId.replace("embed_preview_", "");
-    const cfg = getGuild(interaction.guild.id).embeds[embedKey];
+    const cfg = loadGlobalEmbeds()[embedKey];
     const embed = buildFromConfig(cfg, interaction.guild, { user: "@user", server: interaction.guild.name, count: "123", reason: "example", channel: "#general", detail: "example" });
     return interaction.reply({ embeds: [embed], ephemeral: true });
   }

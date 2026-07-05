@@ -5,6 +5,8 @@ const config = require("./config");
 const DATA_DIR = path.join(__dirname, "..", "serverdata");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+const GLOBAL_EMBEDS_FILE = path.join(__dirname, "..", "global_embeds.json");
+
 const DEFAULT_EMBEDS = {
   // Antinuke
   antinuke_enabled: {
@@ -201,6 +203,10 @@ function defaultGuildData() {
       extraOwners: [],
       antiping: false,
       nukehooks: false,
+      botSpamDetection: true,
+      botSpamThreshold: 20, // messages in 10 seconds
+      botChannelSpamThreshold: 5, // channels in 10 seconds
+      botRoleSpamThreshold: 5, // roles in 10 seconds
     },
     // Auto-restore
     autoRestore: {
@@ -251,6 +257,42 @@ function defaultGuildData() {
 }
 
 const cache = new Map();
+let globalEmbedsCache = null;
+
+function loadGlobalEmbeds() {
+  if (globalEmbedsCache !== null) return globalEmbedsCache;
+  try {
+    const raw = fs.readFileSync(GLOBAL_EMBEDS_FILE, "utf8");
+    globalEmbedsCache = JSON.parse(raw);
+  } catch (e) {
+    console.warn("[db] global_embeds.json not found or invalid, using DEFAULT_EMBEDS");
+    globalEmbedsCache = JSON.parse(JSON.stringify(DEFAULT_EMBEDS));
+  }
+  return globalEmbedsCache;
+}
+
+function saveGlobalEmbeds() {
+  try {
+    fs.writeFileSync(GLOBAL_EMBEDS_FILE, JSON.stringify(globalEmbedsCache, null, 2));
+  } catch (e) {
+    console.error("[db] failed to save global_embeds.json", e);
+    throw e;
+  }
+}
+
+function updateGlobalEmbed(embedKey, embedConfig) {
+  globalEmbedsCache = loadGlobalEmbeds();
+  globalEmbedsCache[embedKey] = { ...globalEmbedsCache[embedKey], ...embedConfig };
+  saveGlobalEmbeds();
+}
+
+function resetGlobalEmbed(embedKey) {
+  globalEmbedsCache = loadGlobalEmbeds();
+  if (DEFAULT_EMBEDS[embedKey]) {
+    globalEmbedsCache[embedKey] = JSON.parse(JSON.stringify(DEFAULT_EMBEDS[embedKey]));
+    saveGlobalEmbeds();
+  }
+}
 
 function filePath(guildId) {
   return path.join(DATA_DIR, `${guildId}.json`);
@@ -264,9 +306,30 @@ function getGuild(guildId) {
     data = JSON.parse(raw);
     // Merge missing defaults (for forward-compat)
     const def = defaultGuildData();
-    data = { ...def, ...data, antinuke: { ...def.antinuke, ...(data.antinuke || {}) }, autoRestore: { ...def.autoRestore, ...(data.autoRestore || {}) }, automod: { ...def.automod, ...(data.automod || {}) }, logging: { ...def.logging, ...(data.logging || {}) }, welcome: { ...def.welcome, ...(data.welcome || {}) }, leveling: { ...def.leveling, ...(data.leveling || {}) } };
+    const globalEmbeds = loadGlobalEmbeds();
+    const existingAntinuke = data.antinuke || {};
+    data = { 
+      ...def, 
+      ...data, 
+      antinuke: { 
+        ...def.antinuke, 
+        ...existingAntinuke,
+        botSpamDetection: existingAntinuke.botSpamDetection !== undefined ? existingAntinuke.botSpamDetection : def.antinuke.botSpamDetection,
+        botSpamThreshold: existingAntinuke.botSpamThreshold || def.antinuke.botSpamThreshold,
+        botChannelSpamThreshold: existingAntinuke.botChannelSpamThreshold || def.antinuke.botChannelSpamThreshold,
+        botRoleSpamThreshold: existingAntinuke.botRoleSpamThreshold || def.antinuke.botRoleSpamThreshold,
+      }, 
+      autoRestore: { ...def.autoRestore, ...(data.autoRestore || {}) }, 
+      automod: { ...def.automod, ...(data.automod || {}) }, 
+      logging: { ...def.logging, ...(data.logging || {}) }, 
+      welcome: { ...def.welcome, ...(data.welcome || {}) }, 
+      leveling: { ...def.leveling, ...(data.leveling || {}) }, 
+      embeds: { ...globalEmbeds, ...(data.embeds || {}) } 
+    };
   } catch {
     data = defaultGuildData();
+    const globalEmbeds = loadGlobalEmbeds();
+    data.embeds = { ...globalEmbeds };
   }
   cache.set(guildId, data);
   return data;
@@ -296,4 +359,4 @@ function addAudit(guildId, action, actor, detail, severity = "info") {
   });
 }
 
-module.exports = { getGuild, saveGuild, updateGuild, addAudit, defaultGuildData, DEFAULT_EMBEDS, DATA_DIR };
+module.exports = { getGuild, saveGuild, updateGuild, addAudit, defaultGuildData, DEFAULT_EMBEDS, DATA_DIR, loadGlobalEmbeds, updateGlobalEmbed, resetGlobalEmbed };
