@@ -1,16 +1,14 @@
 const { EmbedBuilder } = require("discord.js");
 const { getGuild } = require("./database");
+const { resolveEmojis } = require("./emojiUtils");
 
 /*
- * L Embed Builder — v2 (emoji-free, category-hierarchical)
+ * L Embed Builder — v3 (Melon-inspired + server emoji support)
  *
- * Design goals:
- *  - NO emojis in any embed by default. Clean, professional, security-tool aesthetic.
- *  - The builder IGNORES any legacy emoji fields (titleEmoji/footerEmoji/authorEmoji)
- *    so existing command files keep working but render emoji-free automatically.
- *  - Embeds are organized by category: embeds[category][key] for a cleaner hierarchy.
- *  - Flat-key lookup (embeds["ban_success"]) still works for backward compatibility.
- *  - Per-guild overrides fall back to category defaults, then to global defaults.
+ * Aesthetic: dark 0x2B2D31 accent, "**Label:** value" sectioned rows, minimal.
+ * Server emojis: ":name:" tokens in any text field are resolved to the guild's
+ * custom emojis via resolveEmojis(). Controlled by cfg.useServerEmojis (default true).
+ * Set useServerEmojis:false on a config to render emoji tokens literally.
  */
 
 // Replace {placeholders} in a string with values from `vars`
@@ -50,22 +48,32 @@ function buildEmbed(embedKey, guild, vars = {}) {
 }
 
 // Lower-level: build from an explicit config object.
-// Emoji fields are intentionally IGNORED to enforce the emoji-free design.
+// Server emojis: ":name:" tokens resolve to guild custom emojis when useServerEmojis !== false.
 function buildFromConfig(cfg, guild, vars = {}) {
-  const resolve = (t) => (t == null ? null : fill(String(t), vars));
+  const useServerEmojis = cfg.useServerEmojis !== false;
+  const resolve = (t) => {
+    if (t == null) return null;
+    let out = fill(String(t), vars);
+    if (useServerEmojis) out = resolveEmojis(out, guild);
+    return out;
+  };
 
   const color = parseInt((cfg.color || "ED4245").replace("#", ""), 16);
   const embed = new EmbedBuilder().setColor(color);
 
-  // Author (emoji-free)
+  // Author
   if (cfg.authorName) {
     const name = resolve(cfg.authorName);
     if (name) embed.setAuthor({ name });
   }
 
-  // Title (emoji-free — titleEmoji deliberately ignored)
+  // Title (titleEmoji tokens resolve too if present)
   if (cfg.title) {
-    const title = resolve(cfg.title);
+    let title = resolve(cfg.title);
+    if (cfg.titleEmoji) {
+      const emoji = resolve(String(cfg.titleEmoji));
+      if (emoji) title = `${emoji} ${title}`;
+    }
     if (title) embed.setTitle(title);
   }
 
@@ -95,10 +103,12 @@ function buildFromConfig(cfg, guild, vars = {}) {
     try { embed.setImage(cfg.imageUrl); } catch {}
   }
 
-  // Footer (emoji-free — footerEmoji deliberately ignored)
-  if (cfg.footer || cfg.showTimestamp) {
+  // Footer (footerEmoji tokens resolve too if present)
+  if (cfg.footer || cfg.footerEmoji || cfg.showTimestamp) {
+    const emoji = cfg.footerEmoji ? resolve(String(cfg.footerEmoji)) : null;
     const text = cfg.footer ? resolve(cfg.footer) : "";
-    if (text) embed.setFooter({ text });
+    const footerText = [emoji, text].filter(Boolean).join(" ");
+    if (footerText) embed.setFooter({ text: footerText });
   }
 
   if (cfg.showTimestamp) embed.setTimestamp();

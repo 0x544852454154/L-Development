@@ -43,6 +43,7 @@ async function runIdentity(ctx, guild, user, action) {
         name: guild.name,
         iconUrl: guild.iconURL(),
         description: guild.description,
+        vanity: guild.vanityURLCode,
         locked: true,
       };
     });

@@ -422,7 +422,7 @@ function setup(client) {
     });
   });
 
-  // ====== SERVER UPDATE (name + icon + description protection) ======
+  // ====== SERVER UPDATE (name + icon + description + vanity protection) ======
   client.on("guildUpdate", async (oldGuild, newGuild) => {
     const data = getGuild(newGuild.id);
     if (!data.antinuke.enabled || !data.antinuke.strict) return;
@@ -430,11 +430,12 @@ function setup(client) {
     const identity = data.serverIdentity || {};
     if (identity.locked === false) return;
 
-    // Detect changes to name, icon (hash), and description
+    // Detect changes to name, icon (hash), description, and vanity URL
     const nameChanged = oldGuild.name !== newGuild.name;
     const iconChanged = oldGuild.icon !== newGuild.icon; // icon hash comparison
     const descChanged = oldGuild.description !== newGuild.description;
-    if (!nameChanged && !iconChanged && !descChanged) return;
+    const vanityChanged = oldGuild.vanityURLCode !== newGuild.vanityURLCode;
+    if (!nameChanged && !iconChanged && !descChanged && !vanityChanged) return;
 
     const executor = await fetchExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id);
     if (!executor || isWhitelisted(newGuild, executor)) {
@@ -445,6 +446,7 @@ function setup(client) {
           name: newGuild.name,
           iconUrl: newGuild.iconURL(),
           description: newGuild.description,
+          vanity: newGuild.vanityURLCode,
           locked: d.serverIdentity?.locked || true,
         };
       });
@@ -480,11 +482,21 @@ function setup(client) {
         newGuild.setDescription(targetDesc || null, "[L Antinuke] Reverted unauthorized server description change").catch(() => {})
       );
     }
+    if (vanityChanged) {
+      // Restore the old vanity URL code (anti-vanity-steal)
+      // Both astryx and Reo-Bot detect but neither restores — L restores.
+      const targetVanity = identity.vanity || oldGuild.vanityURLCode;
+      if (targetVanity) {
+        revertPromises.push(
+          newGuild.setVanityURL(targetVanity, "[L Antinuke] Reverted unauthorized vanity URL change").catch(() => {})
+        );
+      }
+    }
 
     await Promise.allSettled(revertPromises);
-    await punish(newGuild, executor.id, `Unauthorized server modification (name/icon/description)`);
+    await punish(newGuild, executor.id, `Unauthorized server modification (name/icon/description/vanity)`);
 
-    const changes = [nameChanged && "name", iconChanged && "icon", descChanged && "description"].filter(Boolean);
+    const changes = [nameChanged && "name", iconChanged && "icon", descChanged && "description", vanityChanged && "vanity"].filter(Boolean);
     await alertGuild(newGuild, "antinuke_triggered", {
       action: `server ${changes.join("/") || "modification"}`, executor: executor.tag,
       detail: `Server ${changes.join(", ")} changed by ${executor.tag} — reverted and offender punished.`,
@@ -674,6 +686,74 @@ function setup(client) {
   };
   client.on("stickerCreate", (sticker) => handleSticker(sticker, AuditLogEvent.GuildStickerCreate, "creation"));
   client.on("stickerDelete", (sticker) => handleSticker(sticker, AuditLogEvent.GuildStickerDelete, "deletion"));
+
+  // ====== MEMBER ROLE-ASSIGN PROTECTION (dangerous role given to a member) ======
+  // Ported from Reo-Bot's anti_member_update + astryx's gap fix:
+  // triggers when a member is GIVEN a role with dangerous permissions
+  // (Admin/Ban/Kick/ManageGuild/ManageChannels/ManageRoles/ManageWebhooks/MentionEveryone).
+  // Prevents privilege escalation by assigning an already-dangerous role.
+  client.on("guildMemberUpdate", async (oldMember, newMember) => {
+    const data = getGuild(newMember.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+
+    // Find roles that were ADDED
+    const oldRoleIds = new Set(oldMember.roles.cache.keys());
+    const addedRoles = newMember.roles.cache.filter((r) => !oldRoleIds.has(r.id));
+    if (addedRoles.size === 0) return; // no role change (nickname-only etc.)
+
+    const DANGEROUS = [
+      PermissionFlagsBits.Administrator, PermissionFlagsBits.BanMembers,
+      PermissionFlagsBits.KickMembers, PermissionFlagsBits.ManageGuild,
+      PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles,
+      PermissionFlagsBits.ManageWebhooks, PermissionFlagsBits.MentionEveryone,
+    ];
+    // Did any ADDED role have dangerous permissions?
+    const dangerousAdded = addedRoles.filter((r) => DANGEROUS.some((p) => r.permissions.has(p)));
+    if (dangerousAdded.size === 0) return;
+
+    const executor = await fetchExecutor(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
+    if (!executor || isWhitelisted(newMember.guild, executor)) return;
+
+    // Remove the dangerous roles that were just added + punish
+    try {
+      await newMember.roles.remove(dangerousAdded, "[L Antinuke] Reverted dangerous role assignment");
+    } catch {}
+    const punishedSet = getPunishedSet(newMember.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      punishedSet.add(executor.id);
+      await punish(newMember.guild, executor.id, `Dangerous role assignment to ${newMember.user.tag}`);
+      setTimeout(() => punishedSet.delete(executor.id), 15000);
+    }
+    await alertGuild(newMember.guild, "antinuke_triggered", {
+      action: "dangerous role assignment", executor: executor.tag,
+      detail: `Assigned dangerous role(s) to ${newMember.user.tag} — removed and offender punished.`,
+    });
+  });
+
+  // ====== ANTI INVITE DELETE (block mass invite deletion) ======
+  // Ported from Reo-Bot: protects against mass invite deletion (raid prevention).
+  client.on("inviteDelete", async (invite) => {
+    const data = getGuild(invite.guild.id);
+    if (!data.antinuke.enabled || !data.antinuke.strict) return;
+    const executor = await fetchExecutor(invite.guild, AuditLogEvent.InviteDelete, invite.code);
+    if (!executor || isWhitelisted(invite.guild, executor)) return;
+
+    recordAction(invite.guild.id, "inviteDelete", executor.id, invite.code);
+    const punishedSet = getPunishedSet(invite.guild.id);
+    if (!punishedSet.has(executor.id)) {
+      // Only punish on mass invite deletion (3+ in window)
+      const count = countActions(invite.guild.id, "inviteDelete");
+      if (count >= 3) {
+        punishedSet.add(executor.id);
+        await punish(invite.guild, executor.id, `Mass invite deletion (${count})`);
+        setTimeout(() => punishedSet.delete(executor.id), 15000);
+        await alertGuild(invite.guild, "antinuke_triggered", {
+          action: `mass invite deletion (${count})`, executor: executor.tag,
+        });
+        actionTracker.get(invite.guild.id).set("inviteDelete", []);
+      }
+    }
+  });
 
   // ====== MASS UNBAN ======
   client.on("guildBanRemove", async (ban) => {

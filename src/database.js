@@ -103,9 +103,9 @@ function defaultGuildData() {
     welcome: { channel: null, goodbyeChannel: null, enabled: false, goodbyeEnabled: false },
     // Leveling
     leveling: { enabled: false, channel: null, xp: {}, ignoreChannels: [] },
-    // Server identity lock — snapshot of the protected name/icon/description.
+    // Server identity lock — snapshot of the protected name/icon/description/vanity.
     // Any unauthorized change to these is reverted to the snapshot.
-    serverIdentity: { name: null, iconUrl: null, description: null, locked: false },
+    serverIdentity: { name: null, iconUrl: null, description: null, vanity: null, locked: false },
     // Embeds (emoji-free, flat for backward compat)
     embeds: JSON.parse(JSON.stringify(DEFAULT_EMBEDS)),
     // AFK

@@ -83,6 +83,7 @@ function runAntinuke(ctx, guild, user, action, opts = {}) {
         name: guild.name,
         iconUrl: guild.iconURL(),
         description: guild.description,
+        vanity: guild.vanityURLCode,
         locked: true,
       };
     });

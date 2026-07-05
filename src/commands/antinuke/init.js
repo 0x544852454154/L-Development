@@ -28,6 +28,7 @@ async function runInit(ctx, guild, user) {
     name: guild.name,
     iconUrl: guild.iconURL(),
     description: guild.description,
+    vanity: guild.vanityURLCode,
     locked: true,
   };
 
