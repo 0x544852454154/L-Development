@@ -1,0 +1,18 @@
+{
+  "name": "l-antinuke-bot",
+  "version": "1.0.0",
+  "description": "L — The Antinuke Authority. A Discord antinuke bot with auto-restore, fully customizable embeds, server emoji support, and 63 commands.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "deploy": "node src/deploy.js"
+  },
+  "keywords": ["discord", "antinuke", "bot", "auto-restore", "security"],
+  "author": "L Antinuke",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
